@@ -1,0 +1,31 @@
+{
+  "sdk": 2,
+  "state": "managed",
+  "id": "twenty-nine",
+  "name": "29",
+  "title": "29",
+  "blurb": "The Indian trick-taking game for two partnerships: bid 16 to 28, pick a hidden trump, take the points.",
+  "description": "Four players in two partnerships. Bid for your side on four cards, lay the trump aside face down, then play eight tricks: J, 9, A and 10 carry the 28 points. Ask for the trump when you can't follow suit. The pair rule is an option. Bots fill empty seats.",
+  "entry": "index.html",
+  "rules": "RULES.md",
+  "shape": "free",
+  "seats": {
+    "min": 4,
+    "max": 4
+  },
+  "bots": true,
+  "kind": "teams",
+  "leaderboard": false,
+  "tags": [
+    "alone",
+    "party",
+    "cards"
+  ],
+  "categories": [
+    "strategy"
+  ],
+  "preview": "preview.gif",
+  "license": "MIT",
+  "author": "lokeshmohanty",
+  "repo": "https://github.com/lokeshmohanty/card-games"
+}
