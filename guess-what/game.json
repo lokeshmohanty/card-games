@@ -1,0 +1,32 @@
+{
+  "sdk": 2,
+  "state": "managed",
+  "id": "guess-what",
+  "name": "GUESS WHAT",
+  "title": "Guess What",
+  "blurb": "Everyone sees a picture but the guesser. Give clues, out loud or typed, before the clock runs out.",
+  "description": "A picture clue party game. The others see the picture and give clues without its name; the guesser picks it from nine before time is up. Play across phones, or on one phone with people sharing it. Over 350 pictures in six categories, none repeated until all are seen. Bots give clues and guess too.",
+  "entry": "index.html",
+  "rules": "RULES.md",
+  "shape": "free",
+  "seats": {
+    "min": 2,
+    "max": 8
+  },
+  "bots": true,
+  "sameDevice": true,
+  "kind": "ffa",
+  "leaderboard": false,
+  "tags": [
+    "alone",
+    "party",
+    "cards"
+  ],
+  "categories": [
+    "party"
+  ],
+  "preview": "preview.gif",
+  "license": "MIT",
+  "author": "lokeshmohanty",
+  "repo": "https://github.com/lokeshmohanty/card-games"
+}
