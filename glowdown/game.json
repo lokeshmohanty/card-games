@@ -1,0 +1,31 @@
+{
+  "sdk": 2,
+  "state": "managed",
+  "id": "glowdown",
+  "name": "GLOWDOWN",
+  "title": "Glowdown",
+  "blurb": "Match suit or face, play your actions, shed every card first. House rules to switch on. Two to eight players.",
+  "description": "An original shedding game with its own deck of light: Sun, Moon, Star and Bolt, ZAP +2, BLOCK, BOUNCE and PRISMs. Match the suit or the face and be first out. Switch on stacking, jump-in, 7 swaps and 0 rotates, or draw until you can play. Bots fill empty seats.",
+  "entry": "index.html",
+  "rules": "RULES.md",
+  "shape": "free",
+  "seats": {
+    "min": 2,
+    "max": 8
+  },
+  "bots": true,
+  "kind": "ffa",
+  "leaderboard": false,
+  "tags": [
+    "alone",
+    "party",
+    "cards"
+  ],
+  "categories": [
+    "party"
+  ],
+  "preview": "preview.gif",
+  "license": "MIT",
+  "author": "lokeshmohanty",
+  "repo": "https://github.com/lokeshmohanty/card-games"
+}
