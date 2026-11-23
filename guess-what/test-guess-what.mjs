@@ -145,11 +145,10 @@ console.log("\nno repeats until the pool is spent");
 
 console.log("\nbots give clues and guess");
 {
-	const g = game({ now });
+	// One person and bots start straight away, with the options last played (`last`).
+	const g = game({ now, last: () => ({ secs: 60, turns: 1 }) });
 	const seats = [{ id: "p0", bot: false }, { id: "bot_1", bot: true }, { id: "bot_2", bot: true }];
 	g.init({ seats, seed: 21, match: 0, first: "p0" });
-	g.apply({ action: { opts: { secs: 60, turns: 1 } }, by: "p0" });
-	g.apply({ action: { start: true }, by: "p0" });
 	pass(g, READY_MS);
 	let v = g.view({ seat: "p0" });
 	check("the host is told when to look next (a bot's clue is due)", v.msNext > 0 && v.msNext < 5000);
@@ -166,10 +165,8 @@ console.log("\nbots give clues and guess");
 	let rights = 0;
 	let games = 0;
 	for (let seed = 1; seed <= 20; seed++) {
-		const b = game({ now });
+		const b = game({ now, last: () => ({ secs: 45, turns: 1 }) });
 		b.init({ seats: [{ id: "p0", bot: false }, ...[1, 2, 3].map((i) => ({ id: `bot_${i}`, bot: true }))], seed, match: 0, first: "bot_1" });
-		b.apply({ action: { opts: { secs: 45, turns: 1 } }, by: "p0" });
-		b.apply({ action: { start: true }, by: "p0" });
 		for (let k = 0; k < 2000 && b.view({ seat: null }).phase !== "over"; k++) {
 			const w = b.view({ seat: null });
 			if (w.phase === "guess" && w.guesser === 0) b.apply({ action: { pick: answerOf(b) }, by: "p0" });
@@ -184,11 +181,9 @@ console.log("\nbots give clues and guess");
 
 console.log("\none phone");
 {
-	const g = game({ now });
+	const g = game({ now, last: () => ({ secs: 30, turns: 1 }) });
 	const seats = [{ id: "p0", bot: false }, { id: "bot_1", bot: true, local: true }, { id: "bot_2", bot: true, local: true }, { id: "bot_3", bot: true }];
 	g.init({ seats, seed: 4, match: 0, first: "bot_1" });
-	g.apply({ action: { opts: { secs: 30, turns: 1 } }, by: "p0" });
-	g.apply({ action: { start: true }, by: "p0" });
 	let v = g.view({ seat: "p0" });
 	check("one person and people on their phone: one phone, the bot sits out", v.mode === "one" && JSON.stringify(v.players) === "[0,1,2]" && v.total === 3);
 	check("the first guesser is `first`; the phone waits for GO", v.guesser === 1 && v.phase === "ready" && v.picture === null && v.msNext === null);
@@ -217,6 +212,61 @@ console.log("\none phone");
 	pass(g, TALLY_MS);
 	const r = g.result();
 	check("the end: ranked by pictures got, the people on the phone named", g.view({ seat: null }).phase === "over" && JSON.stringify(r.ranking[0]) === '["bot_1"]' && r.names.bot_1 === "Player 2" && r.names.bot_2 === "Player 3" && !("bot_3" in r.scores), JSON.stringify(r));
+}
+
+console.log("\nthe options: only the first time");
+{
+	// Lokesh, 2026-11-23 ("only the first time", as Ludo).
+	const withBots = [{ id: "p0", bot: false }, { id: "bot_1", bot: true }, { id: "bot_2", bot: true }];
+	const all = CATEGORIES.map((c) => c.id);
+	let g = game({ now });
+	g.init({ seats: withBots, seed: 1, match: 0, first: "p0" });
+	let w = g.view({ seat: "p0" });
+	check("one person and bots, nothing kept: straight into the first round, every category, 45 s, two turns", w.phase === "ready" && w.opts.cats.length === all.length && w.opts.secs === 45 && w.opts.turns === 2);
+	g = game({ now, last: () => ({ cats: ["food", "play"], secs: 30, turns: 1 }) });
+	g.init({ seats: withBots, seed: 1, match: 0 });
+	w = g.view({ seat: "p0" });
+	check("…with the options last played on this device", w.phase === "ready" && w.opts.cats.join() === "food,play" && w.opts.secs === 30 && w.opts.turns === 1 && w.total === 3);
+	for (const [label, kept, want] of [
+		["junk", "x", { cats: all.length, secs: 45, turns: 2 }],
+		["unknown categories only", { cats: ["cars"], secs: 60 }, { cats: all.length, secs: 60, turns: 2 }],
+		["some unknown categories", { cats: ["cars", "food"], turns: 3 }, { cats: 1, secs: 45, turns: 3 }],
+		["times not offered", { secs: 20, turns: 9 }, { cats: all.length, secs: 45, turns: 2 }],
+	]) {
+		const k = game({ now, last: () => kept });
+		k.init({ seats: withBots, seed: 1, match: 0 });
+		const o = k.view({ seat: "p0" }).opts;
+		check(`kept options that are ${label}: the defaults where they are wrong`, k.view({ seat: null }).phase === "ready" && o.cats.length === want.cats && o.secs === want.secs && o.turns === want.turns, JSON.stringify(o));
+	}
+	const broken = game({
+		now,
+		last: () => {
+			throw new Error("gone");
+		},
+	});
+	broken.init({ seats: withBots, seed: 1, match: 0 });
+	check("kept options that cannot be read: the defaults", broken.view({ seat: null }).phase === "ready" && broken.view({ seat: null }).opts.secs === 45);
+	const one = game({ now });
+	one.init({ seats: [{ id: "p0", bot: false }, { id: "bot_1", bot: true, local: true }], seed: 1, match: 0 });
+	check("one phone (a PERSON seat): straight to the first turn, waiting for GO", one.view({ seat: null }).mode === "one" && one.view({ seat: null }).phase === "ready");
+	g = game({ now, last: () => ({ secs: 60 }) });
+	g.init({ seats: people(3), seed: 1, match: 0, first: "p0" });
+	check("people on their own phones, a first game: the options first, the last ones picked", g.view({ seat: null }).phase === "setup" && g.view({ seat: null }).opts.secs === 60);
+	g.apply({ action: { opts: { turns: 1, secs: 30 } }, by: "p0" });
+	g.apply({ action: { start: true }, by: "p0" });
+	check("setNext is refused while playing", g.setNext({ secs: 60 }) === "only once the game is over");
+	for (let k = 0; k < 40 && g.view({ seat: null }).phase !== "over"; k++) pass(g, 31_000);
+	check("(the game is over)", g.view({ seat: null }).phase === "over");
+	check("at the end, the next game is this one's options", g.nextGame().opts.secs === 30 && g.nextGame().opts.turns === 1);
+	check("setNext refuses what is not offered", g.setNext({ secs: 20 }) === "no such time" && g.setNext({ turns: 0 }) === "no such number" && g.setNext({ cats: [] }) === "pick at least one category" && g.setNext({ cats: ["cars"] }) === "pick at least one category" && g.setNext({ colour: "red" }) === "no such option");
+	check("setNext (CHANGE at the end) takes categories, seconds and turns", g.setNext({ cats: ["animals"], secs: 60 }) == null && g.nextGame().opts.cats.join() === "animals" && g.nextGame().opts.secs === 60 && g.nextGame().opts.turns === 1);
+	g.init({ seats: people(3), seed: 2, match: 1, first: "p1" });
+	w = g.view({ seat: "p0" });
+	check("PLAY AGAIN: straight into the first round with the options picked at the end (people too)", w.phase === "ready" && w.opts.cats.join() === "animals" && w.opts.secs === 60 && w.opts.turns === 1 && w.guesser === 1 && w.category === "animals");
+	const heir = game({ now });
+	heir.restore({ snapshot: JSON.parse(JSON.stringify(g.snapshot())) });
+	heir.init({ seats: people(3), seed: 3, match: 2, first: "p2" });
+	check("an heir's PLAY AGAIN keeps them too", heir.view({ seat: null }).phase === "ready" && heir.view({ seat: null }).opts.cats.join() === "animals" && heir.view({ seat: null }).opts.secs === 60);
 }
 
 console.log("\nwho guesses first goes round");

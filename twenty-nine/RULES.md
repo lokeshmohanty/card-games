@@ -16,12 +16,13 @@ The traditional Indian trick-taking game. Four players in two partnerships: seat
 - **Winning a trick.** The highest trump wins it (the trump counts in the trick where it is shown). With no trump in it, the highest card of the suit led wins. The winner leads the next trick.
 
 ## The pair (a house rule)
-The host can switch this off before the deal; it is on to begin with. Once the trump is shown, a player holding its **K and Q** whose side has already won a trick may tap **SHOW PAIR** on their turn. If they are on the bidding side, the bid drops by 4 (never under 16). If they are on the other side, the bid rises by 4 (never over 28). Only one pair a hand.
+The host can switch this off before the first game; it is on to begin with. Once the trump is shown, a player holding its **K and Q** whose side has already won a trick may tap **SHOW PAIR** on their turn. If they are on the bidding side, the bid drops by 4 (never under 16). If they are on the other side, the bid rises by 4 (never over 28). Only one pair a hand.
 
 ## Scoring
 - After eight tricks, the bidding side counts the points in the tricks it took.
 - **Made the bid:** the bidding side scores a game point. **Missed it:** the other side scores the game point.
 - The first side to the target wins. The host picks **1, 3 or 6** hands; 3 to begin with.
+- The host picks the rules before the first game only. **PLAY AGAIN** keeps them; at the end, **CHANGE** on the host's screen picks them for the next game. Playing alone against bots, the game starts straight away with the rules you last played.
 - The deal moves on one seat every hand, and the first dealer moves on every game.
 
 ## Example

@@ -30,6 +30,12 @@
 // every game (docs/sdk-v2.md "Who starts": `first` is the first to bid and
 // lead, so the dealer sits just before them).
 //
+// The rules are asked only the first time (Lokesh, 2026-11-23, as Ludo):
+// PLAY AGAIN deals straight away with the same rules, or the ones the host
+// picked at the end ("Next game: … · CHANGE": `nextGame()` / `setNext()`); one
+// person with three bots deals straight away with the rules last played on
+// the host's phone (`last()`), or the defaults.
+//
 // The pair (a house rule, on unless the host turns it off): once the trump is
 // shown, a player holding its K and Q whose side has won a trick may show the
 // pair on their turn. Shown by the bidding side, the bid drops by 4 (not
@@ -83,13 +89,26 @@
 		return best.seat;
 	}
 
+	const DEFAULT_HOUSE = { pair: true, goal: 3 };
+	/** The rules from anything (kept on a phone, carried over): the pair on or off, a target offered; the rest the defaults. */
+	function cleanHouse(h) {
+		const ok = h && typeof h === "object" && !Array.isArray(h);
+		return { pair: ok && typeof h.pair === "boolean" ? h.pair : DEFAULT_HOUSE.pair, goal: ok && GOALS.includes(h.goal) ? h.goal : DEFAULT_HOUSE.goal };
+	}
+	/** Why `patch` is not a change of the rules; null when it is. */
+	function houseProblem(patch) {
+		if (!patch || typeof patch !== "object" || Array.isArray(patch)) return "no such rule";
+		for (const [k, v] of Object.entries(patch)) if (!((k === "pair" && typeof v === "boolean") || (k === "goal" && GOALS.includes(v)))) return "no such rule";
+		return null;
+	}
+
 	/**
 	 * The managed rules (docs/sdk-v2.md, Layer 2). `isHost(id)`: whether that
-	 * player may set the house rules and deal.
+	 * player may set the house rules and deal. `last()`: the rules last played
+	 * on the host's phone, or null (the page keeps them in the game's storage).
 	 */
-	function game({ isHost = () => true } = {}) {
+	function game({ isHost = () => true, last = () => null } = {}) {
 		let s = null;
-		let house = { pair: true, goal: 3 }; // kept across PLAY AGAIN
 
 		const seatOf = (id) => s.seats.indexOf(id);
 		const next = (i) => (i + 1) % 4;
@@ -389,10 +408,22 @@
 				const sd = Math.abs(Math.floor(Number(seed) || 0));
 				if (opener < 0) opener = sd % Math.max(1, ids.length);
 				const dealer = (opener + ids.length - 1) % Math.max(1, ids.length);
+				// The rules only the first time (above): PLAY AGAIN deals straight
+				// away with the rules picked at the end, else this game's; one
+				// person with three bots with the rules last played on the host's
+				// phone, or the defaults.
+				const prev = s;
+				const people = seats.filter((p) => !p.bot).length;
+				let saved = null;
+				try {
+					saved = prev ? (prev.next ?? prev.house) : last();
+				} catch {}
+				const straight = ids.length === 4 && (prev ? (match ?? 0) > 0 : people === 1);
 				s = {
 					match: (match ?? 0) + 1,
 					phase: "setup",
-					house: { ...house },
+					house: cleanHouse(saved),
+					next: null, // the rules picked at the end for PLAY AGAIN (setNext)
 					seats: ids,
 					bots: seats.map((p) => !!p.bot),
 					gone: ids.map(() => false),
@@ -408,6 +439,10 @@
 					n: 0,
 					rng: (sd ^ 0x29292929) >>> 0,
 				};
+				if (straight) {
+					newHand();
+					carryOn(-1);
+				}
 			},
 
 			apply({ action, by }) {
@@ -417,17 +452,12 @@
 					if (a.house === undefined && !a.start) return "wait for the deal";
 					if (!isHost(by)) return "the host sets the rules";
 					if (a.house !== undefined) {
-						if (!a.house || typeof a.house !== "object") return "no such rule";
-						for (const [k, v] of Object.entries(a.house)) {
-							if (k === "pair") house.pair = !!v;
-							else if (k === "goal" && GOALS.includes(v)) house.goal = v;
-							else return "no such rule";
-						}
-						s.house = { ...house };
+						const why = houseProblem(a.house);
+						if (why) return why;
+						s.house = { ...s.house, ...a.house };
 					}
 					if (a.start) {
 						if (s.seats.length !== 4) return "29 needs four players";
-						s.house = { ...house };
 						newHand();
 						carryOn(-1);
 					}
@@ -538,14 +568,23 @@
 				return true;
 			},
 
-			snapshot: () => JSON.parse(JSON.stringify({ s, house })),
+			/** Not a rule: the next game's rules, for the host's page to offer at the end ("Next game: … · CHANGE"). */
+			nextGame: () => ({ house: { ...(s.next ?? s.house) } }),
+			/** Not a rule: change the next game's rules once this one is over (the host's page, on its own live rules). Nothing when taken, else the reason. */
+			setNext(patch) {
+				if (s.phase !== "over") return "only once the game is over";
+				const why = houseProblem(patch);
+				if (why) return why;
+				s.next = { ...(s.next ?? s.house), ...patch };
+			},
+
+			snapshot: () => JSON.parse(JSON.stringify({ s })),
 			restore({ snapshot }) {
 				const copy = JSON.parse(JSON.stringify(snapshot));
 				s = copy.s;
-				house = copy.house ?? { ...s.house };
 			},
 		};
 	}
 
-	globalThis.twentyNineRules = { SUITS, SUIT_NAMES, SUIT_MARKS, RANKS, POINTS, MIN_BID, MAX_BID, PAIR, GOALS, suitOf, rankOf, order, pointsOf, cardOf, nameOf, sideOf, trickWinner, game };
+	globalThis.twentyNineRules = { DEFAULT_HOUSE, cleanHouse, SUITS, SUIT_NAMES, SUIT_MARKS, RANKS, POINTS, MIN_BID, MAX_BID, PAIR, GOALS, suitOf, rankOf, order, pointsOf, cardOf, nameOf, sideOf, trickWinner, game };
 })();

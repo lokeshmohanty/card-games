@@ -17,7 +17,7 @@
 // face (a 7 on a 7, a BLOCK on a BLOCK), and a PRISM plays on anything and
 // names the suit. Can't play? Draw one; if it plays you may play it, or pass.
 //
-// ## House rules (the host sets them before the deal; all off by default)
+// ## House rules (the host sets them before the first deal; all off by default)
 //
 //   stack      ZAP +2 on a ZAP +2, PRISM +4 on either: the draws add up and
 //              the first player who cannot answer draws them all.
@@ -26,6 +26,13 @@
 //   sevenZero  a 7 swaps your hand with a player you pick; a 0 passes every
 //              hand on round the table, the way play is going.
 //   drawUntil  drawing goes on until you draw a card that plays.
+//
+// The setup only the first time (Lokesh, 2026-11-23, as Ludo): PLAY AGAIN
+// deals straight away with the same rules, or with the ones the host picked
+// at the end ("Next game: … · CHANGE": `nextGame()` / `setNext()`); one
+// person with bots deals straight away with the rules last played on the
+// host's phone (`last()`), or the defaults. Friends at a first game, or a
+// fresh table (CHANGE PLAYERS), get the setup, with the last rules picked.
 //
 // ## A match
 //
@@ -80,14 +87,28 @@
 		return list;
 	}
 
+	const DEFAULT_HOUSE = Object.fromEntries(HOUSE.map((k) => [k, false]));
+	/** House rules from anything (kept on a phone, carried over): each known rule that is true or false, the rest the defaults. */
+	function cleanHouse(h) {
+		const out = { ...DEFAULT_HOUSE };
+		if (h && typeof h === "object" && !Array.isArray(h)) for (const k of HOUSE) if (typeof h[k] === "boolean") out[k] = h[k];
+		return out;
+	}
+	/** Why `patch` is not a change of house rules; null when it is. */
+	function houseProblem(patch) {
+		if (!patch || typeof patch !== "object" || Array.isArray(patch)) return "no such rule";
+		for (const [k, v] of Object.entries(patch)) if (!HOUSE.includes(k) || typeof v !== "boolean") return "no such rule";
+		return null;
+	}
+
 	/**
 	 * The managed rules (docs/sdk-v2.md, Layer 2). `isHost(id)`: whether that
 	 * player may set the house rules and deal (the page passes the party's
-	 * host; tests leave it open).
+	 * host; tests leave it open). `last()`: the house rules last played on the
+	 * host's phone, or null (the page keeps them in the game's storage).
 	 */
-	function game({ isHost = () => true } = {}) {
+	function game({ isHost = () => true, last = () => null } = {}) {
 		let s = null;
-		let house = Object.fromEntries(HOUSE.map((k) => [k, false])); // kept across PLAY AGAIN
 
 		const seatOf = (id) => s.seats.indexOf(id);
 		const active = (i) => !s.out[i];
@@ -241,7 +262,6 @@
 			s.rng = r.state();
 			s.phase = "play";
 			s.turn = active(s.opener) ? s.opener : after(s.opener);
-			s.house = { ...house };
 			event({ kind: "deal", seat: s.opener, card: first });
 		}
 
@@ -322,12 +342,9 @@
 				if (a.house === undefined && !a.start) return "wait for the deal";
 				if (!isHost(by)) return "the host sets the house rules";
 				if (a.house !== undefined) {
-					if (!a.house || typeof a.house !== "object") return "no such rule";
-					for (const [k, v] of Object.entries(a.house)) {
-						if (!HOUSE.includes(k)) return "no such rule";
-						house[k] = !!v;
-					}
-					s.house = { ...house };
+					const why = houseProblem(a.house);
+					if (why) return why;
+					s.house = { ...s.house, ...a.house };
 				}
 				if (a.start) deal();
 				return;
@@ -382,10 +399,22 @@
 				}
 				const sd = Math.abs(Math.floor(Number(seed) || 0));
 				if (opener < 0) opener = sd % Math.max(1, ids.length);
+				// The setup only the first time (above): PLAY AGAIN deals straight
+				// away with the rules picked for it at the end, else this game's;
+				// one person with bots deals straight away with the rules last
+				// played on the host's phone, or the defaults.
+				const prev = s;
+				const people = seats.filter((p) => !p.bot).length;
+				let saved = null;
+				try {
+					saved = prev ? (prev.next ?? prev.house) : last();
+				} catch {}
+				const straight = prev ? (match ?? 0) > 0 : people === 1 && ids.length > 1;
 				s = {
 					match: (match ?? 0) + 1,
 					phase: "setup",
-					house: { ...house },
+					house: cleanHouse(saved),
+					next: null, // the rules picked at the end for PLAY AGAIN (setNext)
 					seats: ids,
 					bots: seats.map((p) => !!p.bot),
 					out: ids.map(() => false),
@@ -408,6 +437,7 @@
 					reshuffles: 0,
 					rng: (sd ^ 0x9e3779b9) >>> 0,
 				};
+				if (straight) deal();
 			},
 
 			apply({ action, by }) {
@@ -511,14 +541,27 @@
 				return true;
 			},
 
-			snapshot: () => JSON.parse(JSON.stringify({ s, house })),
+			/** Not a rule: the next game's house rules, for the host's page to offer at the end ("Next game: … · CHANGE"). */
+			nextGame: () => ({ house: { ...(s.next ?? s.house) } }),
+			/**
+			 * Not a rule: change the next game's house rules, once this one is
+			 * over (the platform takes no moves after the end, so the host's page
+			 * calls this on its own rules, the live ones). PLAY AGAIN deals with
+			 * them. Nothing when taken, else the reason.
+			 */
+			setNext(patch) {
+				if (s.phase !== "over") return "only once the game is over";
+				const why = houseProblem(patch);
+				if (why) return why;
+				s.next = { ...(s.next ?? s.house), ...patch };
+			},
+
+			snapshot: () => JSON.parse(JSON.stringify({ s })),
 			restore({ snapshot }) {
-				const copy = JSON.parse(JSON.stringify(snapshot));
-				s = copy.s;
-				house = copy.house ?? { ...s.house };
+				s = JSON.parse(JSON.stringify(snapshot)).s;
 			},
 		};
 	}
 
-	globalThis.glowdownRules = { SUITS, SUIT_NAMES, ACTIONS, FACE_NAMES, HAND, HOUSE, HOUSE_NAMES, DECK, isWild, isNumber, pointsOf, nameOf, drawOf, rng, shuffle, game };
+	globalThis.glowdownRules = { SUITS, SUIT_NAMES, ACTIONS, FACE_NAMES, HAND, HOUSE, HOUSE_NAMES, DEFAULT_HOUSE, cleanHouse, DECK, isWild, isNumber, pointsOf, nameOf, drawOf, rng, shuffle, game };
 })();

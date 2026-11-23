@@ -21,9 +21,26 @@
 // with the face and the suit's shape), so every card stays a whole tap target
 // at 354px wide; cards overlap only as much as the row needs, and a long
 // hand takes another row rather than going narrower than that.
+//
+// ## The house rules, only the first time
+//
+// Lokesh, 2026-11-23 (as Ludo): the house-rules screen comes before the
+// first game only. PLAY AGAIN deals straight away with the same rules; at the
+// end the host's phone says "Next game: … · CHANGE", and CHANGE picks the
+// rules for the next game (on the host's own rules, the live ones: the
+// platform takes no moves after the end). The rules played are kept on the
+// host's phone (the game's storage, "house"), so a one-tap start with bots
+// deals with them straight away.
 
 const GD = glowdownRules;
-const rules = GD.game({ isHost: (id) => id === arcade.party?.host });
+// The host's last house rules, from this phone's storage (the rules clean
+// anything odd in it: a rule they do not know, a value not true or false).
+let lastHouse = null;
+arcade.init.then((m) => {
+	const h = m?.storage?.house;
+	if (h && typeof h === "object") lastHouse = h;
+});
+const rules = GD.game({ isHost: (id) => id === arcade.party?.host, last: () => lastHouse });
 arcade.managed(rules);
 
 const style = document.createElement("style");
@@ -111,6 +128,17 @@ style.textContent = `
 	.gd-rule[aria-pressed="true"] .sw { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
 	.gd-rule:disabled { cursor: default; opacity: 0.85; }
 	.gd-sumrow { display: flex; justify-content: space-between; gap: 8px; font-size: 0.85rem; color: var(--ink); }
+	/* The end: what the next game will be, and CHANGE (the host's), at the top, clear of the shell's tucked end card. */
+	.gd-next { position: absolute; left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); top: calc(env(safe-area-inset-top) + 56px);
+		z-index: 4; display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; border-radius: 12px; border: 2px solid var(--accent);
+		background: var(--surface); box-shadow: 0 0 18px var(--glow); font-size: 0.85rem; color: var(--ink-2); max-width: 520px; margin: 0 auto; box-sizing: border-box; }
+	.gd-next[hidden] { display: none; }
+	.gd-next-line { display: flex; align-items: center; justify-content: space-between; gap: 6px 10px; flex-wrap: wrap; }
+	.gd-next-line b { color: var(--ink); font-weight: 600; }
+	.gd-next-rules { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+	.gd-next-rules button { min-height: 44px; border-radius: 10px; border: 2px solid var(--rule); background: var(--surface-2); color: var(--ink);
+		font: 600 0.85rem var(--font-body); cursor: pointer; padding: 4px 8px; }
+	.gd-next-rules button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
 `;
 document.head.append(style);
 
@@ -215,7 +243,10 @@ const handEl = el("div", "gd-hand");
 handEl.setAttribute("aria-label", "Your hand");
 const mid = el("div", "gd-mid");
 mid.append(tableEl, said, bar);
-stage.append(statusEl, others, mid, handEl);
+const nextEl = el("div", "gd-next");
+nextEl.hidden = true;
+nextEl.setAttribute("aria-label", "The next game");
+stage.append(statusEl, others, mid, handEl, nextEl);
 document.body.append(stage);
 let sheet = null;
 
@@ -488,6 +519,66 @@ function send(action) {
 drawBtn.addEventListener("click", () => myTurn() && arcade.act({ draw: true }));
 passBtn.addEventListener("click", () => myTurn() && arcade.act({ pass: true }));
 
+// ------------------------------------------------------------ next game
+
+let choosingNext = false;
+/** The house rules in a few words: "Stack draws, Jump in", or "no house rules". */
+const houseWords = (h) => GD.HOUSE.filter((k) => h[k]).map((k) => GD.HOUSE_NAMES[k]).join(", ") || "no house rules";
+/** The next game's rules, as the host's own rules have them; null where there is none to change. */
+function nextGame() {
+	if (!view || view.phase !== "over" || !amHost()) return null;
+	try {
+		return rules.nextGame();
+	} catch {
+		return null;
+	}
+}
+/** Kept on this phone: the house rules a one-tap start deals with next time. */
+function keepHouse(h) {
+	if (JSON.stringify(h) === JSON.stringify(lastHouse)) return;
+	lastHouse = { ...h };
+	arcade.send("store.set", { key: "house", value: lastHouse });
+}
+function pickNext(patch) {
+	if (rules.setNext(patch) !== undefined) return;
+	keepHouse(rules.nextGame().house);
+	renderNext();
+}
+let lastNext = "";
+function renderNext() {
+	const n = nextGame();
+	if (!n) choosingNext = false;
+	const key = JSON.stringify([n, choosingNext]);
+	if (key === lastNext) return;
+	lastNext = key;
+	nextEl.hidden = !n;
+	if (!n) return void nextEl.replaceChildren();
+	const change = el("button", "gd-btn gd-next-change", choosingNext ? "DONE" : "CHANGE");
+	change.type = "button";
+	change.setAttribute("aria-label", choosingNext ? "Done choosing the next game's house rules" : "Change the next game's house rules");
+	change.addEventListener("click", () => {
+		choosingNext = !choosingNext;
+		renderNext();
+	});
+	const what = el("span");
+	what.append(document.createTextNode("Next game: "), el("b", "", houseWords(n.house)));
+	const line = el("div", "gd-next-line");
+	line.append(what, change);
+	if (!choosingNext) return void nextEl.replaceChildren(line);
+	const picks = el("div", "gd-next-rules");
+	picks.setAttribute("role", "group");
+	picks.setAttribute("aria-label", "Next game's house rules");
+	for (const k of GD.HOUSE) {
+		const b = el("button", "", GD.HOUSE_NAMES[k]);
+		b.type = "button";
+		b.dataset.rule = k;
+		b.setAttribute("aria-pressed", String(!!n.house[k]));
+		b.addEventListener("click", () => pickNext({ [k]: !n.house[k] }));
+		picks.append(b);
+	}
+	nextEl.replaceChildren(line, picks);
+}
+
 function render() {
 	if (!view) return;
 	setPile();
@@ -495,6 +586,7 @@ function render() {
 	renderOthers();
 	renderTable();
 	renderHand();
+	renderNext();
 }
 
 arcade.on("view", ({ state }) => {
@@ -521,6 +613,8 @@ arcade.on("view", ({ state }) => {
 		const rows = state.seats.map((_, seat) => `${nameOf(seat)} ${state.points[seat]}`);
 		said.textContent = `Points left: ${rows.join(" · ")}`;
 	}
+	// The house rules played, kept on the host's phone for its next one-tap start.
+	if (state.phase === "play" && amHost()) keepHouse(state.house);
 	renderSetup();
 	render();
 	arcade.idle?.();
@@ -537,4 +631,4 @@ addEventListener("resize", render);
 new ResizeObserver(() => render()).observe(stage);
 
 /** For the tests: the view, whether it is this phone's turn, and any pick open. */
-arcade.debug = () => ({ ...(view ?? { seats: [], hand: [], legal: [] }), myTurn: myTurn(), picking: picking && { ...picking }, host: amHost() });
+arcade.debug = () => ({ ...(view ?? { seats: [], hand: [], legal: [] }), myTurn: myTurn(), picking: picking && { ...picking }, host: amHost(), kept: lastHouse && { ...lastHouse } });

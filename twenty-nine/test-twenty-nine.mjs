@@ -342,6 +342,59 @@ console.log("\nbots left on turn by their own move, and seats that leave");
 	check("SKIP TURN makes the move for them", h.skip({ seat: "p2" }) === true && v(h).bids.length >= 3);
 }
 
+console.log("\nthe rules: only the first time");
+{
+	// Lokesh, 2026-11-23 ("only the first time", as Ludo).
+	let g = game();
+	g.init({ seats: seatsOf(true), seed: 1, match: 0, first: "p0" });
+	let w = v(g);
+	check("one person and three bots, nothing kept: straight into the bidding, pair on, three hands", w.phase === "bid" && w.house.pair === true && w.house.goal === 3 && w.counts.every((n) => n === 4));
+	g = game({ last: () => ({ pair: false, goal: 6 }) });
+	g.init({ seats: seatsOf(true), seed: 1, match: 0 });
+	check("…with the rules last played on this device", v(g).phase === "bid" && v(g).house.pair === false && v(g).house.goal === 6);
+	for (const [label, kept, want] of [
+		["junk", 42, { pair: true, goal: 3 }],
+		["a goal not offered", { pair: false, goal: 4 }, { pair: false, goal: 3 }],
+		["wrong types", { pair: "no", goal: "6" }, { pair: true, goal: 3 }],
+	]) {
+		const k = game({ last: () => kept });
+		k.init({ seats: seatsOf(true), seed: 1, match: 0 });
+		check(`kept rules that are ${label}: the defaults where they are wrong`, v(k).phase === "bid" && v(k).house.pair === want.pair && v(k).house.goal === want.goal, JSON.stringify(v(k).house));
+	}
+	const broken = game({
+		last: () => {
+			throw new Error("gone");
+		},
+	});
+	broken.init({ seats: seatsOf(true), seed: 1, match: 0 });
+	check("kept rules that cannot be read: the defaults", v(broken).phase === "bid" && v(broken).house.goal === 3);
+	g = game({ last: () => ({ goal: 1 }) });
+	g.init({ seats: seatsOf(), seed: 1, match: 0, first: "p0" });
+	check("four people, a first game: the setup, the last rules picked", v(g).phase === "setup" && v(g).house.goal === 1);
+	const three = game();
+	three.init({ seats: seatsOf(true).slice(0, 3), seed: 1, match: 0 });
+	check("not four seats: the setup (it cannot deal)", v(three).phase === "setup");
+	g.apply({ action: { start: true }, by: "p0" });
+	check("setNext is refused while playing", g.setNext({ goal: 6 }) === "only once the game is over");
+	const snap = g.snapshot();
+	inPlay(snap.s, [["Js"], ["7s"], ["9s"], ["As"]], { bidder: 0, bid: 16, trump: "hearts", turn: 0 });
+	snap.s.trickNo = 7;
+	snap.s.points = [10, 12];
+	g.restore({ snapshot: snap });
+	for (const [p, c] of [["p0", "Js"], ["p1", "7s"], ["p2", "9s"], ["p3", "As"]]) g.apply({ action: { play: C(c) }, by: p });
+	check("(the game is over: one hand to win)", v(g).phase === "over");
+	check("at the end, the next game is this one's rules", g.nextGame().house.goal === 1 && g.nextGame().house.pair === true);
+	check("setNext refuses a target not offered, and an unknown rule", g.setNext({ goal: 4 }) === "no such rule" && g.setNext({ trumps: 2 }) === "no such rule" && g.setNext({ pair: 1 }) === "no such rule");
+	check("setNext (CHANGE at the end) takes the target and the pair", g.setNext({ goal: 6 }) == null && g.setNext({ pair: false }) == null && g.nextGame().house.goal === 6 && !g.nextGame().house.pair);
+	g.init({ seats: seatsOf(), seed: 2, match: 1, first: "p1" });
+	w = v(g);
+	check("PLAY AGAIN: straight into the bidding with the rules picked at the end (four people too)", w.phase === "bid" && w.house.goal === 6 && w.house.pair === false && w.turn === 1);
+	const heir = game();
+	heir.restore({ snapshot: JSON.parse(JSON.stringify(g.snapshot())) });
+	heir.init({ seats: seatsOf(), seed: 3, match: 2, first: "p2" });
+	check("an heir's PLAY AGAIN keeps them too", v(heir).phase === "bid" && v(heir).house.goal === 6 && v(heir).house.pair === false);
+}
+
 console.log("\nwho deals goes round");
 {
 	const g = game();
@@ -359,10 +412,12 @@ console.log("\nwho deals goes round");
 	old.init({ seats, seed: 9, match: 1 });
 	const d1 = v(old).dealer;
 	check("without `first` (an older shell): the next seat deals first each PLAY AGAIN", d1 === (d0 + 1) % 4, JSON.stringify([d0, d1]));
-	g.init({ seats, seed: 5, match: 3, first: "p1" });
-	g.apply({ action: { house: { goal: 6 } }, by: "p0" });
-	g.init({ seats, seed: 5, match: 4, first: "p2" });
-	check("PLAY AGAIN keeps the host's rules", v(g).house.goal === 6);
+	const h = game();
+	h.init({ seats, seed: 5, match: 0, first: "p1" });
+	h.apply({ action: { house: { goal: 6 } }, by: "p0" });
+	h.apply({ action: { start: true }, by: "p0" });
+	h.init({ seats, seed: 5, match: 1, first: "p2" });
+	check("PLAY AGAIN keeps the host's rules", v(h).house.goal === 6 && v(h).phase === "bid");
 }
 
 console.log("\nhandover mid-hand");

@@ -18,7 +18,7 @@ Be the first to play out every card in your hand. Two to eight players; bots fil
 - The first player to play their last card wins.
 
 ## House rules
-The host switches these on or off before the deal. They are all off to begin with.
+The host switches these on or off before the first game; they are all off to begin with. **PLAY AGAIN** keeps them. At the end, the host's screen shows the next game's rules: tap **CHANGE** to switch them for the next game. Playing alone against bots, the game starts straight away with the rules you last played.
 - **Stack draws:** answer a ZAP +2 with another ZAP +2, or with a PRISM +4; answer a PRISM +4 only with another PRISM +4. The draws add up, and the first player who can't answer draws them all and misses their turn.
 - **Jump in:** if you hold the exact card on top of the pile (same suit, same face), you may play it even when it isn't your turn. Play goes on from you.
 - **7 swaps, 0 rotates:** play a 7 and swap your whole hand with any player you pick. Play a 0 and every hand moves on one seat, the way play is going.

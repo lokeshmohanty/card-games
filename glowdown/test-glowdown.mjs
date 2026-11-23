@@ -242,10 +242,10 @@ console.log("\nthe bots finish games, under every house rule");
 		for (const n of [2, 3, 5, 8]) {
 			for (let seed = 1; seed <= 6; seed++) {
 				games++;
-				const g = game();
+				// One person and bots: dealt at once, with the rules last played (`last`).
+				const g = game({ last: () => house });
 				g.init({ seats: seatsOf(n, true), seed: seed * 101 + n, match: 0 });
-				g.apply({ action: { house }, by: "p0" });
-				g.apply({ action: { start: true }, by: "p0" });
+				if (JSON.stringify(g.view({ seat: null }).house) !== JSON.stringify({ ...globalThis.glowdownRules.DEFAULT_HOUSE, ...house })) refused++;
 				let k = 0;
 				for (; k < 3000 && !g.result(); k++) {
 					const [who] = g.turn();
@@ -312,6 +312,76 @@ console.log("\na bot still on turn after its own move moves on in the same apply
 	check("a bot's drawn card that plays is played in the same move", w.top === card("sun", "8") && w.turn === 2 && w.drawn === null);
 }
 
+console.log("\nthe house rules: only the first time");
+{
+	// Lokesh, 2026-11-23 ("only the first time", as Ludo): the setup comes
+	// before the first match; PLAY AGAIN keeps the rules; a one-tap start uses
+	// the host device's last rules, or the defaults.
+	const botsTable = (n) => seatsOf(n, true);
+	let g = game();
+	g.init({ seats: botsTable(4), seed: 1, match: 0, first: "p0" });
+	let w = v(g);
+	check("one person and bots, nothing kept: straight into the deal, rules all off", w.phase === "play" && HOUSE.every((k) => w.house[k] === false) && w.counts.every((n) => n === 7));
+	g = game({ last: () => ({ stack: true, jumpIn: false, sevenZero: true, drawUntil: false }) });
+	g.init({ seats: botsTable(3), seed: 1, match: 0, first: "p0" });
+	w = v(g);
+	check("…with the rules last played on this device", w.phase === "play" && w.house.stack && w.house.sevenZero && !w.house.jumpIn);
+	for (const [label, kept] of [
+		["junk", "not an object"],
+		["an array", [true, true]],
+		["wrong types", { stack: "yes", jumpIn: 1, sevenZero: null }],
+		["an unknown rule", { cheat: true, drawUntil: true }],
+	]) {
+		const k = game({ last: () => kept });
+		k.init({ seats: botsTable(3), seed: 1, match: 0 });
+		const kv = v(k);
+		check(`kept rules that are ${label}: the defaults where they are wrong, a deal anyway`, kv.phase === "play" && (label === "an unknown rule" ? kv.house.drawUntil && !("cheat" in kv.house) : HOUSE.every((r) => kv.house[r] === false)), JSON.stringify(kv.house));
+	}
+	const broken = game({
+		last: () => {
+			throw new Error("storage gone");
+		},
+	});
+	broken.init({ seats: botsTable(3), seed: 1, match: 0 });
+	check("kept rules that cannot be read: the defaults", v(broken).phase === "play" && HOUSE.every((r) => v(broken).house[r] === false));
+	g = game({ last: () => ({ stack: true }) });
+	g.init({ seats: seatsOf(3), seed: 1, match: 0, first: "p0" });
+	w = v(g);
+	check("friends at the table (more than one person), a first game: the setup, the last rules picked", w.phase === "setup" && w.house.stack === true);
+	g.apply({ action: { house: { jumpIn: true } }, by: "p0" });
+	g.apply({ action: { start: true }, by: "p0" });
+	check("nextGame() is refused while playing; setNext too", g.setNext({ stack: false }) === "only once the game is over");
+	const snap = g.snapshot();
+	snap.s.hands[0] = [snap.s.hands[0][0]];
+	snap.s.turn = 0;
+	snap.s.drawn = null;
+	snap.s.pending = 0;
+	const only = snap.s.hands[0][0];
+	snap.s.pile.push(DECK.findIndex((c, id) => id !== only && !snap.s.hands.flat().includes(id) && !snap.s.pile.includes(id) && (DECK[only].s === null || c.s === DECK[only].s) && c.s !== null));
+	snap.s.suit = DECK[snap.s.pile.at(-1)].s;
+	g.restore({ snapshot: snap });
+	g.apply({ action: { play: only, suit: "sun" }, by: "p0" });
+	check("(the game is over)", v(g).phase === "over");
+	let next = g.nextGame();
+	check("at the end, the next game is this one's rules", next.house.stack && next.house.jumpIn && !next.house.sevenZero, JSON.stringify(next));
+	check("setNext refuses a rule that does not exist", g.setNext({ cheat: true }) === "no such rule");
+	check("…and one that is not on or off", g.setNext({ stack: "maybe" }) === "no such rule");
+	check("setNext (CHANGE at the end) takes a rule", g.setNext({ sevenZero: true, stack: false }) == null && g.nextGame().house.sevenZero && !g.nextGame().house.stack);
+	g.init({ seats: seatsOf(3), seed: 2, match: 1, first: "p1" });
+	w = v(g);
+	check("PLAY AGAIN: straight into the deal, with the rules picked at the end (friends too)", w.phase === "play" && w.house.sevenZero && w.house.jumpIn && !w.house.stack && w.turn === 1);
+	g.init({ seats: seatsOf(3), seed: 3, match: 2, first: "p2" });
+	check("…and the next PLAY AGAIN keeps them", v(g).phase === "play" && v(g).house.sevenZero && v(g).house.jumpIn);
+	const heir = game();
+	heir.restore({ snapshot: JSON.parse(JSON.stringify(g.snapshot())) });
+	heir.init({ seats: seatsOf(3), seed: 4, match: 3, first: "p0" });
+	check("an heir's PLAY AGAIN keeps the rules too (they ride in the snapshot)", v(heir).phase === "play" && v(heir).house.sevenZero && v(heir).house.jumpIn);
+	const fresh = game();
+	fresh.init({ seats: seatsOf(3), seed: 1, match: 0 });
+	fresh.init({ seats: seatsOf(3), seed: 1, match: 0 });
+	check("a fresh mount of the same frame (match 0 again, CHANGE PLAYERS) with friends: the setup again", v(fresh).phase === "setup");
+}
+
 console.log("\nwho deals goes round");
 {
 	const g = game();
@@ -330,17 +400,18 @@ console.log("\nwho deals goes round");
 	const b = v(old).opener;
 	old.init({ seats, seed: 9, match: 2 });
 	check("without `first` (an older shell): the next seat each PLAY AGAIN", b === (a + 1) % 4 && v(old).opener === (a + 2) % 4, JSON.stringify([a, b, v(old).opener]));
-	g.apply({ action: { house: { jumpIn: true } }, by: "p0" });
-	g.init({ seats, seed: 5, match: 3, first: "p0" });
-	check("PLAY AGAIN keeps the house rules the host chose", v(g).house.jumpIn === true);
+	const h = game();
+	h.init({ seats, seed: 5, match: 0, first: "p0" });
+	h.apply({ action: { house: { jumpIn: true } }, by: "p0" });
+	h.apply({ action: { start: true }, by: "p0" });
+	h.init({ seats, seed: 5, match: 1, first: "p1" });
+	check("PLAY AGAIN keeps the house rules the host chose", v(h).house.jumpIn === true && v(h).phase === "play");
 }
 
 console.log("\nhandover mid-game");
 {
-	const g = game();
+	const g = game({ last: () => ({ stack: true, sevenZero: true }) });
 	g.init({ seats: seatsOf(4, true), seed: 42, match: 0, first: "p0" });
-	g.apply({ action: { house: { stack: true, sevenZero: true } }, by: "p0" });
-	g.apply({ action: { start: true }, by: "p0" });
 	for (let k = 0; k < 15 && !g.result(); k++) {
 		const [who] = g.turn();
 		g.apply({ action: g.bot({ seat: who }), by: who });

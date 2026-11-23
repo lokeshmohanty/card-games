@@ -14,7 +14,22 @@
 
 const GP = guessWhatPictures;
 const GR = guessWhatRules;
-const rules = GR.game({ isHost: (id) => id === arcade.party?.host });
+//
+// The options (categories, seconds, turns) are asked only before the first
+// game (Lokesh, 2026-11-23, as Ludo): PLAY AGAIN starts straight away with
+// them; at the end the host's phone says "Next game: … · CHANGE"; and they are
+// kept on the host's phone ("opts" in the game's storage), so a one-tap start
+// with bots begins with them straight away.
+
+// What this phone keeps (the game's storage): the options last played, and
+// the pictures dealt. Read before the rules start, which may be at once.
+let lastOpts = null;
+const rules = GR.game({ isHost: (id) => id === arcade.party?.host, last: () => lastOpts });
+arcade.init.then((m) => {
+	const o = m?.storage?.opts;
+	if (o && typeof o === "object") lastOpts = o;
+	rules.useSeen(m?.storage?.seen);
+});
 arcade.managed(rules);
 
 const style = document.createElement("style");
@@ -93,6 +108,15 @@ style.textContent = `
 	.gw-opt:disabled { cursor: default; opacity: 0.85; }
 	.gw-opts { display: flex; gap: 6px; }
 	.gw-opts .gw-opt { flex: 1; font-family: var(--font-mono); }
+	/* The end: what the next game will be, and CHANGE (the host's), at the top, clear of the shell's tucked end card. */
+	.gw-next { position: absolute; left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); top: calc(env(safe-area-inset-top) + 56px);
+		z-index: 4; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: 12px; border: 2px solid var(--accent);
+		background: var(--surface); box-shadow: 0 0 18px var(--glow); font-size: 0.85rem; color: var(--ink-2); max-width: 520px; margin: 0 auto; box-sizing: border-box; }
+	.gw-next[hidden] { display: none; }
+	.gw-next-line { display: flex; align-items: center; justify-content: space-between; gap: 6px 10px; flex-wrap: wrap; }
+	.gw-next-line b { color: var(--ink); font-weight: 600; }
+	.gw-next .gw-cats { grid-template-columns: 1fr 1fr 1fr; }
+	.gw-next .gw-opt { font-size: 0.8rem; padding: 0 4px; }
 `;
 document.head.append(style);
 
@@ -135,7 +159,10 @@ const scoresEl = el("div", "gw-scores");
 const main = el("div", "gw-main");
 const said = el("div", "gw-said");
 said.setAttribute("aria-live", "polite");
-stage.append(statusEl, clockEl, scoresEl, main, said);
+const nextEl = el("div", "gw-next");
+nextEl.hidden = true;
+nextEl.setAttribute("aria-label", "The next game");
+stage.append(statusEl, clockEl, scoresEl, main, said, nextEl);
 document.body.append(stage);
 let sheet = null;
 
@@ -436,11 +463,93 @@ function renderSetup() {
 	stage.append(sheet);
 }
 
+// ------------------------------------------------------------ next game
+
+let choosingNext = false;
+/** The options in a few words: "Animals, Food · 45 s · 2 turns each". */
+function optsWords(o) {
+	const cats = o.cats.length === GP.CATEGORIES.length ? "every category" : o.cats.map(catName).join(", ");
+	return `${cats} · ${o.secs} s · ${o.turns} turn${o.turns === 1 ? "" : "s"} each`;
+}
+/** The next game's options, as the host's own rules have them; null where there is none to change. */
+function nextGame() {
+	if (!view || view.phase !== "over" || !amHost()) return null;
+	try {
+		return rules.nextGame();
+	} catch {
+		return null;
+	}
+}
+/** Kept on this phone: the options a one-tap start begins with next time. */
+function keepOpts(o) {
+	if (JSON.stringify(o) === JSON.stringify(lastOpts)) return;
+	lastOpts = { ...o, cats: [...o.cats] };
+	arcade.send("store.set", { key: "opts", value: lastOpts });
+}
+function pickNext(patch) {
+	if (rules.setNext(patch) !== undefined) return;
+	keepOpts(rules.nextGame().opts);
+	renderNext();
+}
+let lastNext = "";
+function renderNext() {
+	const n = nextGame();
+	if (!n) choosingNext = false;
+	const key = JSON.stringify([n, choosingNext]);
+	if (key === lastNext) return;
+	lastNext = key;
+	nextEl.hidden = !n;
+	if (!n) return void nextEl.replaceChildren();
+	const o = n.opts;
+	const change = el("button", "gw-btn gw-next-change", choosingNext ? "DONE" : "CHANGE");
+	change.type = "button";
+	change.setAttribute("aria-label", choosingNext ? "Done choosing the next game's options" : "Change the next game's options");
+	change.addEventListener("click", () => {
+		choosingNext = !choosingNext;
+		renderNext();
+	});
+	const what = el("span");
+	what.append(document.createTextNode("Next game: "), el("b", "", optsWords(o)));
+	const line = el("div", "gw-next-line");
+	line.append(what, change);
+	if (!choosingNext) return void nextEl.replaceChildren(line);
+	const cats = el("div", "gw-cats");
+	cats.setAttribute("role", "group");
+	cats.setAttribute("aria-label", "Next game's pictures");
+	for (const c of GP.CATEGORIES) {
+		const on = o.cats.includes(c.id);
+		const b = el("button", "gw-opt", c.name);
+		b.type = "button";
+		b.dataset.cat = c.id;
+		b.setAttribute("aria-pressed", String(on));
+		b.disabled = on && o.cats.length === 1;
+		b.addEventListener("click", () => pickNext({ cats: on ? o.cats.filter((x) => x !== c.id) : [...o.cats, c.id] }));
+		cats.append(b);
+	}
+	const row = (label, list, keyName, attr) => {
+		const r = el("div", "gw-opts");
+		r.setAttribute("role", "group");
+		r.setAttribute("aria-label", label);
+		for (const v of list) {
+			const b = el("button", "gw-opt", attr === "secs" ? `${v} s` : `${v}×`);
+			b.type = "button";
+			b.dataset[attr] = String(v);
+			b.setAttribute("aria-pressed", String(o[keyName] === v));
+			b.setAttribute("aria-label", attr === "secs" ? `${v} seconds a turn` : `${v} turn${v === 1 ? "" : "s"} each`);
+			b.addEventListener("click", () => pickNext({ [keyName]: v }));
+			r.append(b);
+		}
+		return r;
+	};
+	nextEl.replaceChildren(line, cats, row("Next game's seconds a turn", GR.SECS, "secs", "secs"), row("Next game's turns each", GR.TURNS, "turns", "turns"));
+}
+
 function render() {
 	if (!view) return;
 	renderStatus();
 	renderScores();
 	renderMain();
+	renderNext();
 	tickClock();
 }
 
@@ -453,7 +562,9 @@ arcade.on("view", ({ state }) => {
 	if (!before || before.phase !== state.phase || before.match !== state.match) mainKey = "";
 	if (state.phase === "setup" || before?.phase !== state.phase) renderSetup();
 	render();
-	// The host keeps what it has dealt, so pictures do not repeat next time.
+	// The host keeps what it has dealt, so pictures do not repeat next time,
+	// and the options played, for its next one-tap start.
+	if (amHost() && state.phase !== "setup" && state.phase !== "over") keepOpts(state.opts);
 	if (amHost()) {
 		const keys = rules.seenKeys();
 		if (keys.length !== lastSeen) {
@@ -469,11 +580,10 @@ arcade.on("rejected", (m) => {
 	setTimeout(() => said.textContent === m.reason && (said.textContent = ""), 2500);
 });
 arcade.on("roster", () => view && (renderSetup(), (mainKey = ""), render()));
-arcade.init.then((init) => rules.useSeen(init?.storage?.seen));
 addEventListener("resize", () => {
 	mainKey = "";
 	render();
 });
 
 /** For the tests: the view, and whether this phone is guessing. */
-arcade.debug = () => ({ ...(view ?? { seats: [], players: [], choices: [], clues: [] }), iGuess: iGuess(), host: amHost(), rebuilds: rebuilds.length, lastBuilt: rebuilds.slice(-3) });
+arcade.debug = () => ({ ...(view ?? { seats: [], players: [], choices: [], clues: [] }), iGuess: iGuess(), host: amHost(), kept: lastOpts && { ...lastOpts }, rebuilds: rebuilds.length, lastBuilt: rebuilds.slice(-3) });

@@ -45,6 +45,15 @@
 // a phase that has gone is refused, so nothing but time (or the answer) ends
 // a phase.
 //
+// ## The options, only the first time
+//
+// Lokesh, 2026-11-23 (as Ludo): the host picks the categories, the seconds
+// and the turns before the first game only. PLAY AGAIN starts straight away
+// with the same options, or those picked at the end ("Next game: … ·
+// CHANGE": `nextGame()` / `setNext()`); one person with bots, or with people
+// on their phone, starts straight away with the options last played on the
+// host's phone (`last()`), or the defaults.
+//
 // ## No repeats
 //
 // Pictures are dealt from the categories the host picks, never one already
@@ -92,14 +101,34 @@
 		return null;
 	}
 
+	const DEFAULT_OPTS = { cats: P.CATEGORIES.map((c) => c.id), secs: 45, turns: 2 };
+	const isCat = (c) => P.CATEGORIES.some((x) => x.id === c);
+	/** The options from anything (kept on a phone, carried over): what is offered, the rest the defaults. */
+	function cleanOpts(o) {
+		const ok = o && typeof o === "object" && !Array.isArray(o);
+		const cats = ok && Array.isArray(o.cats) ? [...new Set(o.cats.filter(isCat))] : [];
+		return { cats: cats.length ? cats : [...DEFAULT_OPTS.cats], secs: ok && SECS.includes(o.secs) ? o.secs : DEFAULT_OPTS.secs, turns: ok && TURNS.includes(o.turns) ? o.turns : DEFAULT_OPTS.turns };
+	}
+	/** Why `o` is not a change of the options; null when it is. */
+	function optsProblem(o) {
+		if (!o || typeof o !== "object" || Array.isArray(o)) return "no such option";
+		for (const k of Object.keys(o)) if (!["cats", "secs", "turns"].includes(k)) return "no such option";
+		if (o.cats !== undefined && (!Array.isArray(o.cats) || !o.cats.length || !o.cats.every(isCat))) return "pick at least one category";
+		if (o.secs !== undefined && !SECS.includes(o.secs)) return "no such time";
+		if (o.turns !== undefined && !TURNS.includes(o.turns)) return "no such number";
+		return null;
+	}
+	const withOpts = (base, o) => ({ ...base, ...o, cats: [...new Set(o.cats ?? base.cats)] });
+
 	/**
 	 * The managed rules (docs/sdk-v2.md, Layer 2). `now()`: the host's clock
 	 * (tests pass their own). `seen`: picture keys this device has dealt.
 	 * `isHost(id)`: whether that player may pick the options and start.
+	 * `last()`: the options last played on the host's phone, or null (the page
+	 * keeps them in the game's storage).
 	 */
-	function game({ now = () => Date.now(), seen: seenIn = [], isHost = () => true } = {}) {
+	function game({ now = () => Date.now(), seen: seenIn = [], isHost = () => true, last = () => null } = {}) {
 		let s = null;
-		let opts = { cats: P.CATEGORIES.map((c) => c.id), secs: 45, turns: 2 };
 		let seen = new Set(Array.isArray(seenIn) ? seenIn : []);
 
 		const seatOf = (id) => s.seats.indexOf(id);
@@ -277,10 +306,22 @@
 				}
 				const sd = Math.abs(Math.floor(Number(seed) || 0));
 				if (opener < 0) opener = sd % Math.max(1, ids.length);
+				// The options only the first time (above): PLAY AGAIN starts
+				// straight away with those picked at the end, else this game's;
+				// one person (with bots, or people on their phone) with the options
+				// last played on the host's phone, or the defaults.
+				const prev = s;
+				const people = seats.filter((p) => !p.bot).length;
+				let saved = null;
+				try {
+					saved = prev ? (prev.next ?? prev.opts) : last();
+				} catch {}
+				const straight = prev ? (match ?? 0) > 0 : people === 1 && ids.length > 1;
 				s = {
 					match: (match ?? 0) + 1,
 					phase: "setup",
-					opts: { ...opts, cats: [...opts.cats] },
+					opts: cleanOpts(saved),
+					next: null, // the options picked at the end for PLAY AGAIN (setNext)
 					seats: ids,
 					bots: seats.map((p) => !!p.bot),
 					local: seats.map((p) => !!p.local),
@@ -310,6 +351,7 @@
 					rights: 0,
 					rng: (sd ^ 0x6e55e5) >>> 0,
 				};
+				if (straight) start();
 			},
 
 			apply({ action, by }) {
@@ -324,20 +366,9 @@
 					if (a.opts === undefined && !a.start) return "wait for the start";
 					if (!isHost(by)) return "the host picks";
 					if (a.opts !== undefined) {
-						const o = a.opts ?? {};
-						if (o.cats !== undefined) {
-							if (!Array.isArray(o.cats) || !o.cats.length || o.cats.some((c) => !P.CATEGORIES.some((x) => x.id === c))) return "pick at least one category";
-							opts.cats = [...new Set(o.cats)];
-						}
-						if (o.secs !== undefined) {
-							if (!SECS.includes(o.secs)) return "no such time";
-							opts.secs = o.secs;
-						}
-						if (o.turns !== undefined) {
-							if (!TURNS.includes(o.turns)) return "no such number";
-							opts.turns = o.turns;
-						}
-						s.opts = { ...opts, cats: [...opts.cats] };
+						const why = optsProblem(a.opts);
+						if (why) return why;
+						s.opts = withOpts(s.opts, a.opts);
 					}
 					if (a.start) start();
 					return;
@@ -485,20 +516,32 @@
 				if (Array.isArray(keys)) for (const k of keys) if (typeof k === "string") seen.add(k);
 			},
 
+			/** Not a rule: the next game's options, for the host's page to offer at the end ("Next game: … · CHANGE"). */
+			nextGame: () => {
+				const o = s.next ?? s.opts;
+				return { opts: { ...o, cats: [...o.cats] } };
+			},
+			/** Not a rule: change the next game's options once this one is over (the host's page, on its own live rules). Nothing when taken, else the reason. */
+			setNext(o) {
+				if (s.phase !== "over") return "only once the game is over";
+				const why = optsProblem(o);
+				if (why) return why;
+				s.next = withOpts(s.next ?? s.opts, o);
+			},
+
 			// Clocks differ between phones: the heir gets the time left.
 			snapshot: () => {
 				const t = now();
-				return JSON.parse(JSON.stringify({ s: { ...s, deadline: 0, startAt: 0 }, left: s.deadline ? s.deadline - t : null, since: s.startAt ? t - s.startAt : null, opts, seen: [...seen] }));
+				return JSON.parse(JSON.stringify({ s: { ...s, deadline: 0, startAt: 0 }, left: s.deadline ? s.deadline - t : null, since: s.startAt ? t - s.startAt : null, seen: [...seen] }));
 			},
 			restore({ snapshot }) {
 				const c = JSON.parse(JSON.stringify(snapshot));
 				const t = now();
 				s = { ...c.s, deadline: c.left == null ? 0 : t + c.left, startAt: c.since == null ? 0 : t - c.since };
-				opts = c.opts ?? opts;
 				seen = new Set(c.seen ?? []);
 			},
 		};
 	}
 
-	globalThis.guessWhatRules = { SECS, TURNS, READY_MS, REVEAL_MS, TALLY_MS, WRONG_MS, CHOICES, CLUE_MAX, SCORE, clueProblem, game };
+	globalThis.guessWhatRules = { DEFAULT_OPTS, cleanOpts, SECS, TURNS, READY_MS, REVEAL_MS, TALLY_MS, WRONG_MS, CHOICES, CLUE_MAX, SCORE, clueProblem, game };
 })();

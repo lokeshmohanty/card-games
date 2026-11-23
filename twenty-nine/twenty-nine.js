@@ -18,8 +18,21 @@
 // shapes, hearts and diamonds in the theme's first player colour, spades and
 // clubs in ink, so a suit reads by its shape first.
 
+//
+// The rules (the pair, the hands to win) are asked only before the first
+// game (Lokesh, 2026-11-23, as Ludo): PLAY AGAIN deals straight away with
+// them; at the end the host's phone says "Next game: … · CHANGE"; and they are
+// kept on the host's phone ("house" in the game's storage), so a one-tap
+// start with bots deals with them straight away.
+
 const TN = twentyNineRules;
-const rules = TN.game({ isHost: (id) => id === arcade.party?.host });
+// The host's last rules, from this phone's storage (cleaned by the rules).
+let lastHouse = null;
+arcade.init.then((m) => {
+	const h = m?.storage?.house;
+	if (h && typeof h === "object") lastHouse = h;
+});
+const rules = TN.game({ isHost: (id) => id === arcade.party?.host, last: () => lastHouse });
 arcade.managed(rules);
 
 const style = document.createElement("style");
@@ -105,6 +118,13 @@ style.textContent = `
 	.tn-goal { min-width: 52px; min-height: 44px; border-radius: 10px; border: 2px solid var(--rule); background: var(--surface-2); color: var(--ink);
 		font: 700 1rem var(--font-mono); cursor: pointer; }
 	.tn-goal[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+	/* The end: what the next game will be, and CHANGE (the host's), at the top, clear of the shell's tucked end card. */
+	.tn-next { position: absolute; left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); top: calc(env(safe-area-inset-top) + 56px);
+		z-index: 4; display: flex; flex-direction: column; gap: 8px; padding: 8px 10px; border-radius: 12px; border: 2px solid var(--accent);
+		background: var(--surface); box-shadow: 0 0 18px var(--glow); font-size: 0.85rem; color: var(--ink-2); max-width: 520px; margin: 0 auto; box-sizing: border-box; }
+	.tn-next[hidden] { display: none; }
+	.tn-next-line { display: flex; align-items: center; justify-content: space-between; gap: 6px 10px; flex-wrap: wrap; }
+	.tn-next-line b { color: var(--ink); font-weight: 600; }
 `;
 document.head.append(style);
 
@@ -172,7 +192,10 @@ const bar = el("div", "tn-bar");
 mid.append(tableEl, said, bar);
 const handEl = el("div", "tn-hand");
 handEl.setAttribute("aria-label", "Your cards");
-stage.append(statusEl, board, mid, handEl);
+const nextEl = el("div", "tn-next");
+nextEl.hidden = true;
+nextEl.setAttribute("aria-label", "The next game");
+stage.append(statusEl, board, mid, handEl, nextEl);
 document.body.append(stage);
 let sheet = null;
 
@@ -445,6 +468,74 @@ function renderSetup() {
 	stage.append(sheet);
 }
 
+// ------------------------------------------------------------ next game
+
+let choosingNext = false;
+const houseWords = (h) => `first to ${h.goal} hand${h.goal === 1 ? "" : "s"}, pair rule ${h.pair ? "on" : "off"}`;
+/** The next game's rules, as the host's own rules have them; null where there is none to change. */
+function nextGame() {
+	if (!view || view.phase !== "over" || !amHost()) return null;
+	try {
+		return rules.nextGame();
+	} catch {
+		return null;
+	}
+}
+/** Kept on this phone: the rules a one-tap start deals with next time. */
+function keepHouse(h) {
+	if (JSON.stringify(h) === JSON.stringify(lastHouse)) return;
+	lastHouse = { ...h };
+	arcade.send("store.set", { key: "house", value: lastHouse });
+}
+function pickNext(patch) {
+	if (rules.setNext(patch) !== undefined) return;
+	keepHouse(rules.nextGame().house);
+	renderNext();
+}
+let lastNext = "";
+function renderNext() {
+	const n = nextGame();
+	if (!n) choosingNext = false;
+	const key = JSON.stringify([n, choosingNext]);
+	if (key === lastNext) return;
+	lastNext = key;
+	nextEl.hidden = !n;
+	if (!n) return void nextEl.replaceChildren();
+	const change = el("button", "tn-btn tn-next-change", choosingNext ? "DONE" : "CHANGE");
+	change.type = "button";
+	change.setAttribute("aria-label", choosingNext ? "Done choosing the next game's rules" : "Change the next game's rules");
+	change.addEventListener("click", () => {
+		choosingNext = !choosingNext;
+		renderNext();
+	});
+	const what = el("span");
+	what.append(document.createTextNode("Next game: "), el("b", "", houseWords(n.house)));
+	const line = el("div", "tn-next-line");
+	line.append(what, change);
+	if (!choosingNext) return void nextEl.replaceChildren(line);
+	const pair = el("button", "tn-opt");
+	pair.type = "button";
+	pair.dataset.rule = "pair";
+	pair.setAttribute("aria-pressed", String(n.house.pair));
+	const t = el("span", "t");
+	t.append(el("b", "", "The pair"), el("small", "", "K and Q of trump move the bid by 4."));
+	pair.append(t, el("span", "sw", n.house.pair ? "ON" : "OFF"));
+	pair.addEventListener("click", () => pickNext({ pair: !n.house.pair }));
+	const goals = el("div", "tn-goals");
+	goals.setAttribute("role", "group");
+	goals.setAttribute("aria-label", "Next game's hands to win");
+	goals.append(el("span", "", "Hands to win:"));
+	for (const g of TN.GOALS) {
+		const b = el("button", "tn-goal", String(g));
+		b.type = "button";
+		b.dataset.goal = String(g);
+		b.setAttribute("aria-pressed", String(n.house.goal === g));
+		b.addEventListener("click", () => pickNext({ goal: g }));
+		goals.append(b);
+	}
+	nextEl.replaceChildren(line, pair, goals);
+}
+
 function render() {
 	if (!view) return;
 	sizes();
@@ -453,6 +544,7 @@ function render() {
 	renderTable();
 	renderBar();
 	renderHand();
+	renderNext();
 }
 
 arcade.on("view", ({ state }) => {
@@ -482,6 +574,8 @@ arcade.on("view", ({ state }) => {
 	// The host moves the table on to the next hand if nobody taps NEXT HAND.
 	clearTimeout(nextTimer);
 	if (state.phase === "hand-over" && amHost()) nextTimer = setTimeout(() => arcade.act({ next: state.hand }), NEXT_MS);
+	// The rules played, kept on the host's phone for its next one-tap start.
+	if (["bid", "trump", "play"].includes(state.phase) && amHost()) keepHouse(state.house);
 	renderSetup();
 	render();
 	if (!holdTrick) arcade.idle?.();
@@ -494,4 +588,4 @@ addEventListener("resize", render);
 new ResizeObserver(() => render()).observe(stage);
 
 /** For the tests: the view, whether it is this phone's turn, and the trick held on the table. */
-arcade.debug = () => ({ ...(view ?? { seats: [], cards: [], legal: [] }), myTurn: myTurn(), holding: !!holdTrick, host: amHost() });
+arcade.debug = () => ({ ...(view ?? { seats: [], cards: [], legal: [] }), myTurn: myTurn(), holding: !!holdTrick, host: amHost(), kept: lastHouse && { ...lastHouse } });

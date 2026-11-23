@@ -20,8 +20,10 @@ Play on one phone by adding people at SINGLE PLAYER's table as **PERSON** seats 
 - The others describe each picture without saying its name. When you say it, they tap **GOT IT** and the next picture comes up. **PASS** skips a picture.
 - Get as many as you can before the clock runs out. Each one is a point.
 
-## Before you start
-The host picks:
+## Before the first game
+The host picks these before the first game only. **PLAY AGAIN** keeps them; at the end, **CHANGE** on the host's screen picks them for the next game. Playing alone (with bots, or with people sharing your phone), the game starts straight away with what you last played.
+
+The choices are:
 - the **categories**: Animals, Food, Things, Sport & play, Travel & places, Nature & sky;
 - the **seconds** a turn: 30, 45 or 60;
 - the **turns** each player has: 1, 2 or 3.
