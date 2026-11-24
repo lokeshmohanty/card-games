@@ -12,7 +12,7 @@
 // Our own deck (redesigned 2026-11-24), drawn here in markup and SVG from the
 // theme, never a literal colour. Five suits, each with its own glyph — Nova a
 // burst, Comet a head and tail, Crystal a cut gem, Orbit a ringed planet,
-// Eclipse a covered disc — and its own colour (--p4, --p6, --p7, --p8 and
+// Eclipse a half-lit disc — and its own colour (--p4, --p6, --p7, --p8 and
 // grey: none of red, yellow, green or blue), so a suit reads without its
 // colour. The actions have their own marks: SPARK +1 a spark, ECHO rings
 // (corner ≈), GIFT a parcel (corner ⇥), PRISM a prism (corner ▲, +3). The
@@ -179,8 +179,8 @@ const SUIT_ART = {
 	crystal: '<path d="M7 3h10l5 6-10 12L2 9z" fill="currentColor"/><path d="M2 9h20M7 3l5 18M17 3l-5 18" stroke="var(--surface)" stroke-width="1" fill="none" opacity="0.7"/>',
 	// A planet in its ring.
 	orbit: '<circle cx="12" cy="12" r="5" fill="currentColor"/><ellipse cx="12" cy="12" rx="10.5" ry="4" fill="none" stroke="currentColor" stroke-width="1.8" transform="rotate(-25 12 12)"/>',
-	// A disc covered by a dark one, a bright rim showing.
-	eclipse: '<circle cx="12" cy="12" r="9.5" fill="currentColor"/><circle cx="14" cy="10.5" r="8" fill="var(--surface)"/>',
+	// A disc half in shadow: one half lit, the other a rim.
+	eclipse: '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor"/><path d="M12 1v22" stroke="currentColor" stroke-width="1.4"/>',
 };
 const SUIT_VAR = { nova: "var(--p4)", comet: "var(--p6)", crystal: "var(--p7)", orbit: "var(--p8)", eclipse: "var(--ink-3)" };
 const ACTION_ART = {
