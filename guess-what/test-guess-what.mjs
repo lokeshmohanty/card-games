@@ -359,20 +359,38 @@ console.log("\nturns stay equal when someone leaves; an heir keeps the time that
 	const stay = [0, 1, 2].filter((i) => i !== who);
 	check("a player leaves on their turn: those left still guess the same number of times (two each)", g.view({ seat: null }).phase === "over" && stay.every((i) => count(i) === 2), JSON.stringify(guessed));
 	check("…and the rounds counted down to it", g.view({ seat: null }).total === 5, String(g.view({ seat: null }).total));
-	// Review, 2026-11-24: an heir restored a round with all its time back.
+	// Review, 2026-11-24: an heir restored a round with all its time back; then
+	// (re-review) subtracting across two phones' clocks made it hang on their
+	// skew. Now the host's clock moves at least every ~2 s (`msNext` capped), so
+	// a copy — sent after every move — is never older than that, and an heir
+	// takes the copy's time as it is, whatever its own clock says.
 	const h = game({ now });
 	h.init({ seats: people(3), seed: 5, match: 0, first: "p0" });
-	h.apply({ action: { opts: { secs: 30 } }, by: "p0" });
+	h.apply({ action: { opts: { secs: 45 } }, by: "p0" });
 	h.apply({ action: { start: true }, by: "p0" });
-	pass(h, READY_MS);
-	const snap = JSON.parse(JSON.stringify(h.snapshot())); // the last copy the heir got: 30 s left then
-	const later = t + 12_000; // twelve seconds on, the host is gone
-	const heir = game({ now: () => later });
-	heir.restore({ snapshot: snap });
-	check("an heir takes over with the time that has run since its copy taken off (18 s of 30 left, not 30)", heir.view({ seat: null }).msLeft === 18_000, String(heir.view({ seat: null }).msLeft));
-	const skewed = game({ now: () => t + 3_600_000 });
-	skewed.restore({ snapshot: snap });
-	check("…an heir whose clock is far off (an hour) keeps the time the copy had rather than none", skewed.view({ seat: null }).msLeft === 30_000, String(skewed.view({ seat: null }).msLeft));
+	const caps = [];
+	// The host's page does what the view says: a clock move when `msNext` is up.
+	for (let k = 0; k < 12; k++) {
+		const w = h.view({ seat: null });
+		caps.push([w.phase, w.msNext]);
+		pass(h, w.msNext);
+	}
+	check("in the ready and guess phases the host is told to look at least every 2 s", caps.every(([ph, ms]) => (ph !== "ready" && ph !== "guess") || (ms != null && ms <= 2000)), JSON.stringify(caps));
+	check("(…and the round is under way)", h.view({ seat: null }).phase === "guess");
+	const snap = JSON.parse(JSON.stringify(h.snapshot())); // the last copy, taken at the last move
+	check("the copy carries no clock reading of the host's", !("taken" in snap));
+	const ran = 1_900; // the host goes before its next move
+	const truth = h.view({ seat: null }).msLeft - ran;
+	for (const skew of [0, 50_000, -3_000, -30_000, 3_600_000]) {
+		const heir = game({ now: () => t + ran + skew });
+		heir.restore({ snapshot: snap });
+		const said = heir.view({ seat: null }).msLeft;
+		check(`an heir whose clock is ${skew >= 0 ? "+" : ""}${skew / 1000} s off says ${said / 1000} s left: within 2 s of the truth (${truth / 1000} s)`, Math.abs(said - truth) <= 2000, String(said));
+	}
+	const one = game({ now, last: () => ({ secs: 30, turns: 1 }) });
+	one.init({ seats: [{ id: "p0", bot: false }, { id: "bot_1", bot: true, local: true }], seed: 1, match: 0 });
+	one.apply({ action: { go: true }, by: "p0" });
+	check("one phone: the talk phase is looked at every 2 s too", one.view({ seat: null }).phase === "talk" && one.view({ seat: null }).msNext <= 2000, String(one.view({ seat: null }).msNext));
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall passing");

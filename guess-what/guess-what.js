@@ -219,25 +219,39 @@ document.addEventListener("visibilitychange", tickClock);
 // ------------------------------------------------- pictures a phone cannot draw
 //
 // Every picture is Emoji 11 or older, which Android 9 draws; an older phone
-// may draw some as empty boxes. Drawn once on a canvas: a colour emoji has
-// coloured pixels, a missing one (an empty box, nothing) has none. A picture
-// that does not draw is shown by its name.
+// may draw some as empty boxes. Each picture is drawn once on a canvas and
+// compared with how the same canvas draws a character no font has (U+10FFFD):
+// a picture that leaves visible pixels unlike that missing-character box is
+// drawn, whatever its colours (re-review, 2026-11-24: requiring colour named
+// the black, white and grey ones — wolf, zebra, chess…). One that is not is
+// shown by its name.
 const drawn = new Map();
+const SIZE = 32;
+function pixels(ch) {
+	const c = document.createElement("canvas");
+	c.width = c.height = SIZE;
+	const g = c.getContext("2d", { willReadFrequently: true });
+	g.textAlign = "center";
+	g.textBaseline = "middle";
+	g.font = '26px "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+	g.fillStyle = "rgb(128, 128, 128)"; // theme-exempt: a test drawing, never shown
+	g.fillText(ch, SIZE / 2, SIZE / 2 + 1);
+	return g.getImageData(0, 0, SIZE, SIZE).data;
+}
+let missing = null;
 function drawable(e) {
 	if (drawn.has(e)) return drawn.get(e);
 	let ok = true;
 	try {
-		const c = document.createElement("canvas");
-		c.width = c.height = 32;
-		const g = c.getContext("2d", { willReadFrequently: true });
-		g.textAlign = "center";
-		g.textBaseline = "middle";
-		g.font = '26px "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
-		g.fillStyle = "rgb(0, 0, 0)"; // theme-exempt: a test drawing, never shown (a missing glyph draws in it; a colour emoji does not)
-		g.fillText(e, 16, 17);
-		const d = g.getImageData(0, 0, 32, 32).data;
-		ok = false;
-		for (let i = 0; i < d.length && !ok; i += 4) ok = d[i + 3] > 40 && (Math.abs(d[i] - d[i + 1]) > 24 || Math.abs(d[i + 1] - d[i + 2]) > 24 || Math.abs(d[i] - d[i + 2]) > 24);
+		missing ??= pixels("\u{10FFFD}");
+		const d = pixels(e);
+		let visible = 0;
+		let unlike = 0;
+		for (let i = 0; i < d.length; i += 4) {
+			if (d[i + 3] > 40) visible++;
+			if (Math.abs(d[i] - missing[i]) + Math.abs(d[i + 1] - missing[i + 1]) + Math.abs(d[i + 2] - missing[i + 2]) + Math.abs(d[i + 3] - missing[i + 3]) > 60) unlike++;
+		}
+		ok = visible > 8 && unlike > 8;
 	} catch {
 		ok = true;
 	}

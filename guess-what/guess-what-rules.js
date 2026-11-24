@@ -69,6 +69,7 @@
 	const REVEAL_MS = 4500;
 	const TALLY_MS = 5000;
 	const WRONG_MS = 5000;
+	const TICK_MS = 2000; // the longest a running round goes without a clock move (so without a fresh copy for the heir)
 	const CHOICES = 9;
 	const CLUE_MAX = 30;
 	const CLUE_GAP_MS = 1200;
@@ -442,6 +443,10 @@
 				let msNext = null;
 				if (s.deadline) msNext = s.deadline - t;
 				if (s.phase === "guess" && s.plan.length) msNext = Math.min(msNext, s.startAt + s.plan[0].at - t);
+				// While a round runs, a clock move at least every TICK_MS: each move
+				// sends the heir a fresh copy, so an heir's time is never more than
+				// that out (re-review, 2026-11-24), with no clocks compared across phones.
+				if (msNext != null && (s.phase === "ready" || s.phase === "guess" || s.phase === "talk")) msNext = Math.min(msNext, TICK_MS);
 				return {
 					match: s.match,
 					phase: s.phase,
@@ -541,22 +546,19 @@
 			// Clocks differ between phones: the heir gets the time left.
 			snapshot: () => {
 				const t = now();
-				// `taken`: when, so an heir that takes over later counts the time run since (review, 2026-11-24).
-				return JSON.parse(JSON.stringify({ s: { ...s, deadline: 0, startAt: 0 }, left: s.deadline ? s.deadline - t : null, since: s.startAt ? t - s.startAt : null, taken: t, seen: [...seen] }));
+				return JSON.parse(JSON.stringify({ s: { ...s, deadline: 0, startAt: 0 }, left: s.deadline ? s.deadline - t : null, since: s.startAt ? t - s.startAt : null, seen: [...seen] }));
 			},
 			restore({ snapshot }) {
 				const c = JSON.parse(JSON.stringify(snapshot));
 				const t = now();
-				// The time run since the copy was taken, by this phone's clock; a clock
-				// that disagrees wildly (behind, or more than five minutes on) is not
-				// trusted, and the copy's own time left stands.
-				const ran = Number.isFinite(c.taken) ? t - c.taken : 0;
-				const since = ran >= 0 && ran <= 300_000 ? ran : 0;
-				s = { ...c.s, deadline: c.left == null ? 0 : t + Math.max(0, c.left - since), startAt: c.since == null ? 0 : t - c.since - since };
+				// The copy's time left, as it is: no clock of the host's is compared
+				// with this phone's (they may disagree by seconds). The copy is at
+				// most TICK_MS old while a round runs.
+				s = { ...c.s, deadline: c.left == null ? 0 : t + c.left, startAt: c.since == null ? 0 : t - c.since };
 				seen = new Set(c.seen ?? []);
 			},
 		};
 	}
 
-	globalThis.guessWhatRules = { DEFAULT_OPTS, cleanOpts, SECS, TURNS, READY_MS, REVEAL_MS, TALLY_MS, WRONG_MS, CHOICES, CLUE_MAX, SCORE, clueProblem, game };
+	globalThis.guessWhatRules = { DEFAULT_OPTS, cleanOpts, TICK_MS, SECS, TURNS, READY_MS, REVEAL_MS, TALLY_MS, WRONG_MS, CHOICES, CLUE_MAX, SCORE, clueProblem, game };
 })();
