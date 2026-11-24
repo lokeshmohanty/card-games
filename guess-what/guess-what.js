@@ -69,6 +69,9 @@ style.textContent = `
 	.gw-tile:not(:disabled):hover, .gw-tile:focus-visible { border-color: var(--accent); outline: none; box-shadow: 0 0 12px var(--glow); }
 	.gw-tile:disabled { cursor: default; }
 	.gw-tile.x { opacity: 0.35; }
+	.gw-tile.named { font: 600 0.85rem var(--font-body); padding: 4px; overflow-wrap: anywhere; }
+	.gw-strip span.named { font: 600 12px var(--font-body); color: var(--ink); }
+	.gw-pic .nm.big { font-size: 1.6rem; padding: 24px 8px; }
 	.gw-tile.x::after { content: "✕"; position: absolute; inset: 0; display: grid; place-items: center; font: 700 calc(var(--tile) * 0.9) var(--font-display); color: var(--danger); }
 	.gw-tile.a { border-color: var(--good); box-shadow: 0 0 0 3px var(--good); }
 	.gw-clues { width: 100%; display: flex; flex-direction: column; gap: 4px; max-height: var(--cluesH); overflow: hidden; justify-content: flex-end; }
@@ -200,13 +203,47 @@ function tickClock() {
 		const count = view.phase === "ready" && view.mode === "phones" ? document.querySelector(".gw-count") : null;
 		if (count && count.textContent !== String(secs)) count.textContent = String(secs);
 	}
-	// The host moves the clock on when something is due.
-	if (amHost() && dueAt && Date.now() >= dueAt) {
+	// The clock moves on when something is due: the host's phone at once,
+	// any other phone a moment later, so a host whose tab is hidden (its
+	// timers held back, review 2026-11-24) does not stop the round. The rules
+	// do whatever is due by the time it arrives, so a late tick catches up.
+	if (dueAt && Date.now() >= dueAt + (amHost() ? 0 : CATCH_UP_MS)) {
 		dueAt = Date.now() + 1000;
 		arcade.act({ clock: view.clock });
 	}
 }
+const CATCH_UP_MS = 1500;
 setInterval(tickClock, 200);
+document.addEventListener("visibilitychange", tickClock);
+
+// ------------------------------------------------- pictures a phone cannot draw
+//
+// Every picture is Emoji 11 or older, which Android 9 draws; an older phone
+// may draw some as empty boxes. Drawn once on a canvas: a colour emoji has
+// coloured pixels, a missing one (an empty box, nothing) has none. A picture
+// that does not draw is shown by its name.
+const drawn = new Map();
+function drawable(e) {
+	if (drawn.has(e)) return drawn.get(e);
+	let ok = true;
+	try {
+		const c = document.createElement("canvas");
+		c.width = c.height = 32;
+		const g = c.getContext("2d", { willReadFrequently: true });
+		g.textAlign = "center";
+		g.textBaseline = "middle";
+		g.font = '26px "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif';
+		g.fillStyle = "rgb(0, 0, 0)"; // theme-exempt: a test drawing, never shown (a missing glyph draws in it; a colour emoji does not)
+		g.fillText(e, 16, 17);
+		const d = g.getImageData(0, 0, 32, 32).data;
+		ok = false;
+		for (let i = 0; i < d.length && !ok; i += 4) ok = d[i + 3] > 40 && (Math.abs(d[i] - d[i + 1]) > 24 || Math.abs(d[i + 1] - d[i + 2]) > 24 || Math.abs(d[i] - d[i + 2]) > 24);
+	} catch {
+		ok = true;
+	}
+	drawn.set(e, ok);
+	return ok;
+}
 
 // ------------------------------------------------------------- the screens
 
@@ -274,6 +311,10 @@ function refreshLive() {
 function picture(p, size) {
 	const box = el("div", "gw-pic");
 	box.style.setProperty("--pic", `${size}px`);
+	if (!drawable(p.e)) {
+		box.append(el("span", "nm big", p.name));
+		return box;
+	}
 	const e = el("span", "gw-emoji", p.e);
 	e.setAttribute("role", "img");
 	e.setAttribute("aria-label", p.name);
@@ -307,7 +348,8 @@ function sayBox() {
 function grid(interactive) {
 	const g = el("div", "gw-grid");
 	view.choices.forEach((e, k) => {
-		const t = el("button", `gw-tile gw-emoji${view.struck.includes(k) ? " x" : ""}${view.result && view.result.answer === k ? " a" : ""}`, e);
+		const named = !drawable(e);
+		const t = el("button", `gw-tile gw-emoji${named ? " named" : ""}${view.struck.includes(k) ? " x" : ""}${view.result && view.result.answer === k ? " a" : ""}`, named ? view.choiceNames[k] : e);
 		t.type = "button";
 		t.dataset.pick = String(k);
 		t.disabled = !interactive || view.struck.includes(k);
@@ -354,7 +396,7 @@ function renderMain() {
 		} else if (v.phase === "guess") {
 			parts.push(picture(v.picture, Math.min(96, h * 0.22)));
 			const strip = el("div", "gw-strip live");
-			v.choices.forEach((e, k) => strip.append(el("span", `gw-emoji${v.struck.includes(k) ? " x" : ""}`, e)));
+			v.choices.forEach((e, k) => strip.append(drawable(e) ? el("span", `gw-emoji${v.struck.includes(k) ? " x" : ""}`, e) : el("span", `named${v.struck.includes(k) ? " x" : ""}`, v.choiceNames[k].slice(0, 3))));
 			strip.setAttribute("aria-label", "The nine pictures the guesser sees");
 			parts.push(strip, cluesBox(3));
 			if (v.you >= 0 && v.players.includes(v.you)) parts.push(sayBox());
@@ -391,7 +433,7 @@ function renderMain() {
 		} else if (v.phase === "tally") {
 			parts.push(el("div", "gw-big", `${nameOf(v.tally.guesser)} got ${v.tally.got.length}`));
 			const strip = el("div", "gw-strip");
-			for (const p of v.tally.got.slice(-18)) strip.append(el("span", "gw-emoji", p.e));
+			for (const p of v.tally.got.slice(-18)) strip.append(drawable(p.e) ? el("span", "gw-emoji", p.e) : el("span", "named", p.name.slice(0, 3)));
 			parts.push(strip);
 			const next = el("button", "gw-btn go", "NEXT");
 			next.type = "button";

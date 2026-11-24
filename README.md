@@ -8,8 +8,8 @@ sibling [lokeshmohanty/web-games](https://github.com/lokeshmohanty/web-games).
 
 | Game | Folder | Players | What it is |
 |---|---|---|---|
-| Glowdown | [`glowdown/`](glowdown) | 2–8 | An original shedding game with its own deck of light (Sun, Moon, Star, Bolt; ZAP +2, BLOCK, BOUNCE, PRISM). House rules the host switches on: stacking draws, jump-in, 7 swaps / 0 rotates, draw until you can play |
-| Guess What | [`guess-what/`](guess-what) | 2–8 | A picture clue party game: everyone sees the picture but the guesser, who picks it from nine. Across phones (clues out loud or typed), or on one phone with people sharing it. 358 pictures in six categories, none repeated until all are seen |
+| Glowdown | [`glowdown/`](glowdown) | 2–8 | A shedding game with a deck of its own: five suits of the night sky (Nova, Comet, Crystal, Orbit, Eclipse), numbers 1–8, SPARK +1, ECHO, GIFT and PRISMs; 60 cards, five each, placed by cards left. House rules the host switches on: stack sparks, snap, prisms pass hands, draw until you can play |
+| Guess What | [`guess-what/`](guess-what) | 2–8 | A picture clue party game: everyone sees the picture but the guesser, who picks it from nine. Across phones (clues out loud or typed), or on one phone with people sharing it. 343 pictures in six categories (Emoji 11 or older, so Android 9 draws them), none repeated until all are seen |
 | 29 | [`twenty-nine/`](twenty-nine) | 4 | The traditional Indian trick-taking game: two partnerships, bids 16–28, a hidden trump shown on demand, J 3 · 9 2 · A 1 · 10 1; the pair rule as an option |
 
 Every game is multiplayer: alone, bots fill the other seats (they bid, play,

@@ -9,18 +9,24 @@
 //
 // ## The cards
 //
-// Drawn here in markup and SVG from the theme, never a literal colour: each
-// suit has its own shape (a sun's rays, a crescent moon, a star, a bolt) and
-// its own player colour (--p2, --p3, --p5, --p1), so a suit reads without its
-// colour. The other players carry a mark of their own as well (ring, cross…),
-// beside their name.
+// Our own deck (redesigned 2026-11-24), drawn here in markup and SVG from the
+// theme, never a literal colour. Five suits, each with its own glyph — Nova a
+// burst, Comet a head and tail, Crystal a cut gem, Orbit a ringed planet,
+// Eclipse a covered disc — and its own colour (--p4, --p6, --p7, --p8 and
+// grey: none of red, yellow, green or blue), so a suit reads without its
+// colour. The actions have their own marks: SPARK +1 a spark, ECHO rings
+// (corner ≈), GIFT a parcel (corner ⇥), PRISM a prism (corner ▲, +3). The
+// other players carry a mark of their own as well (ring, cross…), beside
+// their name.
 //
 // ## The hand on a phone
 //
 // The hand fans in rows: each card shows at least 44px of itself (its corner,
 // with the face and the suit's shape), so every card stays a whole tap target
 // at 354px wide; cards overlap only as much as the row needs, and a long
-// hand takes another row rather than going narrower than that.
+// hand takes another row rather than going narrower than that. Rows that
+// would not fit stack over each other, each still showing 48px of its cards
+// (their corners), so a hand of 30 fits a 354x696 phone with eight players.
 //
 // ## The house rules, only the first time
 //
@@ -89,7 +95,8 @@ style.textContent = `
 	.gd-hand { position: relative; width: 100%; max-width: 640px; flex: none; display: flex; flex-direction: column; justify-content: flex-end;
 		align-items: center; gap: 6px; padding-top: 8px; }
 	.gd-row { display: flex; justify-content: center; }
-	.gd-card { position: relative; flex: none; padding: 0; border: 0; background: none; cursor: pointer; height: var(--ch); }
+	.gd-card { position: relative; flex: none; padding: 0; border: 0; background: none; cursor: pointer; height: 100%; min-height: 0; }
+	.gd-row { height: var(--ch); align-items: stretch; }
 	.gd-card .gd-face { position: absolute; left: 0; top: 0; width: var(--cw); height: var(--ch); transition: transform 0.12s; }
 	.gd-card.ok .gd-face { transform: translateY(-7px); box-shadow: 0 0 0 2px var(--accent), 0 0 14px var(--glow); }
 	.gd-card:disabled { cursor: default; }
@@ -106,8 +113,8 @@ style.textContent = `
 	.gd-face .mid svg { width: 78%; height: auto; max-height: 100%; }
 	.gd-face .big { font: 700 clamp(14px, calc(var(--cw) * 0.38), 30px) var(--font-display); color: var(--ink); position: absolute; right: 6px; bottom: 4px; }
 	.gd-face.wild { --suit: var(--accent-2); background: var(--surface-2); }
-	.gd-face.wild .mid { inset: 24% 8% 14% 8%; grid-template: 1fr 1fr / 1fr 1fr; }
-	.gd-face.wild .mid svg { width: 86%; }
+	.gd-face.wild .mid { inset: 24% 8% 14% 8%; }
+	.gd-face.wild .mid svg { width: 86%; color: var(--ink); }
 	.gd-sheet { position: absolute; inset: 0; display: grid; place-items: center; background: var(--scrim); z-index: 5; padding: 64px 12px 12px; }
 	.gd-panel { background: var(--surface); border: 2px solid var(--accent); border-radius: 14px; padding: 16px; width: min(100%, 360px);
 		box-shadow: 0 0 24px var(--glow); display: flex; flex-direction: column; gap: 10px; max-height: 100%; overflow: auto; box-sizing: border-box; }
@@ -127,6 +134,9 @@ style.textContent = `
 	.gd-rule[aria-pressed="true"] { border-color: var(--accent); }
 	.gd-rule[aria-pressed="true"] .sw { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
 	.gd-rule:disabled { cursor: default; opacity: 0.85; }
+	.gd-gifts { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 6px; }
+	.gd-give { position: relative; min-height: 80px; padding: 0; border: 0; background: none; }
+	.gd-give .gd-face { position: absolute; inset: 0; }
 	.gd-sumrow { display: flex; justify-content: space-between; gap: 8px; font-size: 0.85rem; color: var(--ink); }
 	/* The end: what the next game will be, and CHANGE (the host's), at the top, clear of the shell's tucked end card. */
 	.gd-next { position: absolute; left: max(8px, env(safe-area-inset-left)); right: max(8px, env(safe-area-inset-right)); top: calc(env(safe-area-inset-top) + 56px);
@@ -161,19 +171,41 @@ function svg(inner, box = "0 0 24 24") {
 // ------------------------------------------------------------- the art
 
 const SUIT_ART = {
-	sun: '<circle cx="12" cy="12" r="5" fill="currentColor"/><g stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 1.5v3M12 19.5v3M1.5 12h3M19.5 12h3M4.6 4.6l2.1 2.1M17.3 17.3l2.1 2.1M4.6 19.4l2.1-2.1M17.3 6.7l2.1-2.1"/></g>',
-	moon: '<path d="M15.5 2.5a9.5 9.5 0 1 0 6 16.8A8 8 0 0 1 15.5 2.5z" fill="currentColor"/>',
-	star: '<path d="M12 1.8l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.7-6.2 3.7 1.6-7L2 9l7.1-.6z" fill="currentColor"/>',
-	bolt: '<path d="M14 1.5L4 13.5h6.5L8.5 22.5 20 9.5h-6.8z" fill="currentColor"/>',
+	// A burst of eight points.
+	nova: '<path d="M12 1.5l2.1 6.4 6.4-2.6-3.6 5.7 5.6 1-6 2.7 3.4 5.8-6-3.2-1.9 6.2-1.9-6.2-6 3.2 3.4-5.8-6-2.7 5.6-1-3.6-5.7 6.4 2.6z" fill="currentColor"/>',
+	// A head with a trailing tail.
+	comet: '<circle cx="16.5" cy="7.5" r="4.5" fill="currentColor"/><path d="M13 10.5L3 21M14.5 12.5L6.5 21.5M11 9L2.5 16.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+	// A cut gem: a hexagon with its facets.
+	crystal: '<path d="M7 3h10l5 6-10 12L2 9z" fill="currentColor"/><path d="M2 9h20M7 3l5 18M17 3l-5 18" stroke="var(--surface)" stroke-width="1" fill="none" opacity="0.7"/>',
+	// A planet in its ring.
+	orbit: '<circle cx="12" cy="12" r="5" fill="currentColor"/><ellipse cx="12" cy="12" rx="10.5" ry="4" fill="none" stroke="currentColor" stroke-width="1.8" transform="rotate(-25 12 12)"/>',
+	// A disc covered by a dark one, a bright rim showing.
+	eclipse: '<circle cx="12" cy="12" r="9.5" fill="currentColor"/><circle cx="14" cy="10.5" r="8" fill="var(--surface)"/>',
 };
-const SUIT_VAR = { sun: "var(--p2)", moon: "var(--p3)", star: "var(--p5)", bolt: "var(--p1)" };
+const SUIT_VAR = { nova: "var(--p4)", comet: "var(--p6)", crystal: "var(--p7)", orbit: "var(--p8)", eclipse: "var(--ink-3)" };
 const ACTION_ART = {
-	zap: '<path d="M10 1.5L2.5 12.5h5L6 22.5l8.5-12h-5z" fill="currentColor"/><path d="M19 4.5l-5.5 8h3.6l-1.1 7.5 6.2-9h-3.7z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>',
-	block: '<circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="2.6"/><path d="M6 18L18 6" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"/>',
-	bounce: '<path d="M5 9a7 7 0 0 1 12-3l2 2M19 15a7 7 0 0 1-12 3l-2-2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><path d="M19.5 3.5v5h-5M4.5 20.5v-5h5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>',
+	// A four-point spark.
+	spark: '<path d="M12 2l2 8 8 2-8 2-2 8-2-8-8-2 8-2z" fill="currentColor"/>',
+	// Rings going out from a point: an echo.
+	echo: '<circle cx="5" cy="12" r="2.5" fill="currentColor"/><path d="M10 6.5a8 8 0 0 1 0 11M14 3.5a12 12 0 0 1 0 17M18 1.5a15 15 0 0 1 0 21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
+	// A parcel with its bow.
+	gift: '<rect x="3" y="9" width="18" height="12" rx="1.5" fill="currentColor"/><rect x="2" y="6" width="20" height="4" rx="1" fill="currentColor"/><path d="M12 6v15" stroke="var(--surface)" stroke-width="2"/><path d="M12 6c-2-4-6-4-6-1.5S10 6 12 6zM12 6c2-4 6-4 6-1.5S14 6 12 6z" fill="none" stroke="currentColor" stroke-width="1.6"/>',
 };
-/** A card's short face, for its corner: "7", "+2", "⊘"… */
-const CORNER = { zap: "+2", block: "⊘", bounce: "⇄", prism: "✦", prism4: "+4" };
+/** A PRISM: a prism splitting a beam into the five suits' colours. */
+function prismArt() {
+	const box = svg('<path d="M1 13h6" stroke="var(--ink-2)" stroke-width="1.6" stroke-linecap="round"/><path d="M12 3l6 16H6z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>');
+	GD.SUITS.forEach((s, k) => {
+		const ray = document.createElementNS(NS, "path");
+		ray.setAttribute("d", `M16 ${10 + k * 1.6}L23 ${6 + k * 3.4}`);
+		ray.setAttribute("stroke", SUIT_VAR[s]);
+		ray.setAttribute("stroke-width", "1.6");
+		ray.setAttribute("stroke-linecap", "round");
+		box.append(ray);
+	});
+	return box;
+}
+/** A card's short face, for its corner: "7", "+1", "≈"… (no other game's marks). */
+const CORNER = { spark: "+1", echo: "≈", gift: "⇥", prism: "▲", prism3: "+3" };
 
 /** A card face element for card `id` (or a face-down back when id is null). */
 function face(id) {
@@ -183,17 +215,12 @@ function face(id) {
 	const ix = el("span", "ix", CORNER[c.f] ?? c.f);
 	if (c.s) ix.append(svg(SUIT_ART[c.s]));
 	const mid = el("div", "mid");
-	if (!c.s) {
-		for (const s of GD.SUITS) {
-			const g = svg(SUIT_ART[s]);
-			g.style.color = SUIT_VAR[s];
-			mid.append(g);
-		}
-	} else if (ACTION_ART[c.f]) mid.append(svg(ACTION_ART[c.f]));
+	if (!c.s) mid.append(prismArt());
+	else if (ACTION_ART[c.f]) mid.append(svg(ACTION_ART[c.f]));
 	else mid.append(svg(SUIT_ART[c.s]));
 	f.append(mid, ix);
 	if (/^\d$/.test(c.f)) f.append(el("span", "big", c.f));
-	if (c.f === "prism4" || c.f === "zap") f.append(el("span", "big", c.f === "zap" ? "+2" : "+4"));
+	if (c.f === "prism3" || c.f === "spark") f.append(el("span", "big", c.f === "spark" ? "+1" : "+3"));
 	f.setAttribute("aria-hidden", "true");
 	return f;
 }
@@ -225,7 +252,7 @@ const tableEl = el("div", "gd-table");
 const drawBtn = el("button", "gd-draw");
 drawBtn.type = "button";
 const back = el("span", "back");
-back.append(svg(SUIT_ART.star));
+back.append(svg(SUIT_ART.nova));
 const drawLbl = el("span", "lbl");
 drawBtn.append(back, drawLbl);
 const drawBox = el("div", "gd-pilebox");
@@ -261,8 +288,8 @@ const nameOf = (seat) => {
 };
 const myTurn = () => !!view && view.phase === "play" && view.you >= 0 && view.turn === view.you;
 const amHost = () => arcade.party?.host === arcade.party?.self;
-const SUIT_ORDER = { sun: 0, moon: 1, star: 2, bolt: 3 };
-const FACE_ORDER = (f) => (/^\d$/.test(f) ? Number(f) : { zap: 10, block: 11, bounce: 12, prism: 13, prism4: 14 }[f]);
+const SUIT_ORDER = { nova: 0, comet: 1, crystal: 2, orbit: 3, eclipse: 4 };
+const FACE_ORDER = (f) => (/^\d$/.test(f) ? Number(f) : { spark: 10, echo: 11, gift: 12, prism: 13, prism3: 14 }[f]);
 const sorted = (hand) =>
 	[...hand].sort((a, b) => {
 		const [x, y] = [GD.DECK[a], GD.DECK[b]];
@@ -273,15 +300,15 @@ const sorted = (hand) =>
 function tell(e) {
 	const who = nameOf(e.seat);
 	if (e.kind === "deal") return `${who} start${e.seat === view.you ? "" : "s"}. ${GD.nameOf(e.card)} is up.`;
-	if (e.kind === "play" || e.kind === "jump") {
+	if (e.kind === "play" || e.kind === "snap") {
 		const named = GD.isWild(e.card) ? ` — ${GD.SUIT_NAMES[e.suit]}` : "";
-		return `${who}${e.kind === "jump" ? " jumped in with" : " played"} ${GD.nameOf(e.card)}${named}.`;
+		return `${who}${e.kind === "snap" ? " snapped in with" : " played"} ${GD.nameOf(e.card)}${named}.`;
 	}
 	if (e.kind === "draw") return `${who} drew ${e.count === 1 ? "a card" : `${e.count} cards`}.`;
 	if (e.kind === "penalty") return `${who} took ${e.count}.`;
-	if (e.kind === "pass") return `${who} passed.`;
-	if (e.kind === "swap") return `${who} swapped hands with ${nameOf(e.target)}.`;
-	if (e.kind === "rotate") return "Every hand moved on one seat.";
+	if (e.kind === "gift") return `${who} gave ${e.target === view.you ? "you" : nameOf(e.target)} a card.`;
+	if (e.kind === "pass" && e.card != null) return "Every hand moved on one seat.";
+	if (e.kind === "pass") return e.quiet ? "" : `${who} passed.`;
 	return "";
 }
 
@@ -295,21 +322,22 @@ function renderStatus() {
 		main = view.winner === view.you ? "YOU WIN!" : view.winner != null ? `${nameOf(view.winner).toUpperCase()} WINS` : "GAME OVER";
 		sub = "Cards left count against you";
 	} else if (myTurn()) {
-		if (picking) main = picking.kind === "suit" ? "PICK A SUIT" : "SWAP WITH WHO?";
+		if (picking) main = picking.kind === "suit" ? "PICK A SUIT" : "GIVE A CARD";
 		else if (view.pending > 0) main = `ANSWER OR DRAW ${view.pending}`;
+		else if (view.echo) main = `ECHO — ANOTHER ${GD.SUIT_NAMES[view.suit].toUpperCase()}, OR PASS`;
 		else if (view.drawn != null) main = "PLAY IT OR PASS";
 		else main = view.legal.length ? "YOUR TURN" : "YOUR TURN — DRAW";
 		sub = `Then ${nameOf(nextSeat())}`;
 	} else {
 		main = `${nameOf(view.turn)} to play`;
-		sub = view.house.jumpIn && view.legal.length ? "You can jump in!" : `Then ${nameOf(nextSeat())}`;
+		sub = view.house.snap && view.legal.length ? "Same number: snap it in!" : `Then ${nameOf(nextSeat())}`;
 	}
 	statusEl.replaceChildren(document.createTextNode(main), el("small", "", sub));
 }
 function nextSeat() {
 	const n = view.seats.length;
 	for (let k = 1; k <= n; k++) {
-		const j = (((view.turn + view.dir * k) % n) + n) % n;
+		const j = (view.turn + k) % n;
 		if (!view.out[j]) return j;
 	}
 	return view.turn;
@@ -333,7 +361,7 @@ function renderTable() {
 	const playing = view.phase !== "setup";
 	tableEl.style.visibility = playing ? "visible" : "hidden";
 	drawLbl.textContent = view.pending > 0 && myTurn() ? `TAKE ${view.pending}` : `DRAW · ${view.drawCount}`;
-	const canDraw = myTurn() && view.drawn == null && !picking;
+	const canDraw = myTurn() && view.drawn == null && !view.echo && !picking;
 	drawBtn.disabled = !canDraw;
 	drawBtn.classList.toggle("mine", canDraw && (!view.legal.length || view.pending > 0));
 	drawBtn.setAttribute("aria-label", view.pending > 0 ? `Draw ${view.pending}` : `Draw a card (${view.drawCount} left)`);
@@ -355,10 +383,11 @@ function renderTable() {
 		s.append(g, document.createTextNode(GD.SUIT_NAMES[view.suit]));
 		info.append(s);
 	}
-	info.append(el("span", "", view.dir === 1 ? "↻ round" : "↺ back"));
+	if (view.echo) info.append(el("span", "", "≈ ECHO"));
 	if (view.pending > 0) info.append(el("span", "gd-owed", `+${view.pending} owed`));
-	passBtn.style.visibility = myTurn() && view.drawn != null && !picking ? "visible" : "hidden";
-	passBtn.disabled = !(myTurn() && view.drawn != null && !picking);
+	const canPass = myTurn() && (view.drawn != null || view.echo) && !picking;
+	passBtn.style.visibility = canPass ? "visible" : "hidden";
+	passBtn.disabled = !canPass;
 }
 
 /** The hand in rows, each card showing at least 44px of itself. */
@@ -375,14 +404,20 @@ function renderHand() {
 	const rows = [];
 	const per = Math.ceil(ids.length / Math.max(1, Math.ceil(ids.length / perRow))); // rows as even as they go
 	for (let i = 0; i < ids.length; i += per) rows.push(ids.slice(i, i + per));
-	// The rows share up to 42% of the stage; a card is never shorter than 64px.
-	const room = stage.clientHeight * 0.42 - 14 - (rows.length - 1) * 6;
-	const ch = Math.round(Math.max(64, Math.min(cw * 1.45, rows.length ? room / rows.length : cw * 1.45)));
+	// The rows share up to 42% of the stage, a card never shorter than 64px;
+	// rows that still do not fit stack over each other, 48px of each showing.
+	const room = Math.max(120, stage.clientHeight * 0.42 - 14);
+	const ch = Math.round(Math.max(64, Math.min(cw * 1.45, rows.length ? (room - (rows.length - 1) * 6) / rows.length : cw * 1.45)));
+	const VSTEP = 48;
+	const vstep = rows.length > 1 ? Math.max(VSTEP, Math.min(ch + 6, (room - ch) / (rows.length - 1))) : ch;
 	handEl.style.setProperty("--cw", `${cw}px`);
 	handEl.style.setProperty("--ch", `${ch}px`);
+	handEl.style.gap = vstep >= ch + 6 ? "6px" : "0px";
 	handEl.replaceChildren(
-		...rows.map((row) => {
+		...rows.map((row, ri) => {
 			const r = el("div", "gd-row");
+			// A row with one below it shows only its top `vstep`, when rows must stack.
+			if (vstep < ch + 6 && ri < rows.length - 1) r.style.height = `${vstep}px`;
 			const step = row.length > 1 ? Math.max(STEP, Math.min(cw + GAP, (W - cw) / (row.length - 1))) : cw;
 			row.forEach((id, k) => {
 				const b = el("button", `gd-card${legal.has(id) ? " ok" : ""}`);
@@ -426,9 +461,9 @@ function openSheet(title, note, body) {
 }
 
 const HINTS = {
-	stack: "Answer a ZAP +2 or PRISM +4 with another; the draws add up.",
-	jumpIn: "Hold the exact card on top? Play it, even out of turn.",
-	sevenZero: "A 7 swaps hands with someone; a 0 passes every hand on.",
+	stack: "Answer a SPARK +1 or PRISM +3 with another; the draws add up.",
+	snap: "Hold the same number as the top card? Snap it in, even out of turn.",
+	pass: "A PRISM also passes every hand on one seat.",
 	drawUntil: "Keep drawing until a card plays.",
 };
 function renderSetup() {
@@ -479,22 +514,21 @@ function choose(id) {
 		render();
 		return;
 	}
-	if (view.house.sevenZero && c.f === "7" && view.hand.length > 1) {
-		picking = { kind: "target", id };
-		const picks = view.seats
-			.map((_, seat) => seat)
-			.filter((seat) => seat !== view.you && !view.out[seat])
-			.map((seat) => {
-				const b = el("button", "gd-pick");
-				b.type = "button";
-				b.dataset.target = String(seat);
-				b.append(seatMark(seat), document.createTextNode(`${nameOf(seat)} · ${view.counts[seat]}`));
-				b.addEventListener("click", () => send({ play: id, target: seat }));
-				return b;
-			});
-		const grid = el("div", "gd-grid");
+	if (c.f === "gift" && view.hand.length > 1) {
+		picking = { kind: "gift", id };
+		const to = nextSeat();
+		const picks = sorted(view.hand.filter((x) => x !== id)).map((x) => {
+			const b = el("button", "gd-pick gd-give");
+			b.type = "button";
+			b.dataset.give = String(x);
+			b.setAttribute("aria-label", `Give ${GD.nameOf(x)}`);
+			b.append(face(x));
+			b.addEventListener("click", () => send({ play: id, gift: x }));
+			return b;
+		});
+		const grid = el("div", "gd-gifts");
 		grid.append(...picks);
-		openSheet("SWAP HANDS WITH…", "Your hand for theirs (the number is how many cards they hold).", [grid, cancelBtn()]);
+		openSheet("GIVE A CARD", `GIFT: one of these goes to ${nameOf(to)}.`, [grid, cancelBtn()]);
 		render();
 		return;
 	}
@@ -589,7 +623,8 @@ function render() {
 	renderNext();
 }
 
-arcade.on("view", ({ state }) => {
+/** A view from the host (also called by the tests with a view of their own, to draw a hand they set). */
+function onView({ state }) {
 	const before = view;
 	view = state;
 	if (!before || before.match !== state.match) {
@@ -609,16 +644,18 @@ arcade.on("view", ({ state }) => {
 		shownLog = fresh.at(-1).n;
 	}
 	if (state.phase === "setup") said.textContent = "First to play out every card wins.";
-	if (state.phase === "over" && state.points) {
-		const rows = state.seats.map((_, seat) => `${nameOf(seat)} ${state.points[seat]}`);
-		said.textContent = `Points left: ${rows.join(" · ")}`;
+	if (state.phase === "over" && state.left) {
+		// Cards left; a player who left has no count (not 0, the best).
+		const rows = state.seats.map((_, seat) => `${nameOf(seat)} ${state.left[seat] == null ? "left" : state.left[seat]}`);
+		said.textContent = `Cards left: ${rows.join(" · ")}`;
 	}
 	// The house rules played, kept on the host's phone for its next one-tap start.
 	if (state.phase === "play" && amHost()) keepHouse(state.house);
 	renderSetup();
 	render();
 	arcade.idle?.();
-});
+}
+arcade.on("view", onView);
 arcade.on("rejected", (m) => {
 	said.textContent = m.reason;
 });

@@ -7,24 +7,33 @@
 //
 // ## The game
 //
-// An original shedding game: be the first to play out every card. The deck is
-// our own — four suits of light (Sun, Moon, Star, Bolt), each told apart by its
-// shape as well as its colour; numbers 0–9 twice in every suit; three action
-// cards twice in every suit (ZAP +2, BLOCK, BOUNCE); and eight PRISMs, four of
-// them PRISM +4. 112 cards.
+// A shedding game with a deck of its own (redesigned 2026-11-24, Lokesh:
+// "Redesign as our own"): be the first to play out every card.
 //
-// A card plays on the pile when it matches the suit in play or the top card's
-// face (a 7 on a 7, a BLOCK on a BLOCK), and a PRISM plays on anything and
-// names the suit. Can't play? Draw one; if it plays you may play it, or pass.
+//   - FIVE suits of the night sky: Nova, Comet, Crystal, Orbit and Eclipse,
+//     each with its own glyph, in colours that are none of red, yellow,
+//     green and blue (the page: --p4, --p6, --p7, --p8 and grey).
+//   - Numbers 1 to 8, ONCE in each suit (40 cards).
+//   - Three action cards in each suit, once each:
+//       SPARK +1  the next player draws one card and misses their turn;
+//       ECHO      play again at once: a card of the same suit (or a PRISM),
+//                 or pass;
+//       GIFT      hand one of your cards to the next player.
+//   - Five PRISMs, no suit: three PRISM (name the suit) and two PRISM +3
+//     (name the suit; the next player draws three and misses their turn).
 //
-// ## House rules (the host sets them before the first deal; all off by default)
+// 60 cards; five each. A card plays when it matches the suit in play or the
+// top card's face (a 6 on a 6, a GIFT on a GIFT); a PRISM plays on anything.
+// Play always goes the same way round. Can't play? Draw one; if it plays you
+// may play it, or pass.
 //
-//   stack      ZAP +2 on a ZAP +2, PRISM +4 on either: the draws add up and
-//              the first player who cannot answer draws them all.
-//   jumpIn     a card identical to the top card (same suit, same face) may be
-//              played by anyone, out of turn; play goes on from them.
-//   sevenZero  a 7 swaps your hand with a player you pick; a 0 passes every
-//              hand on round the table, the way play is going.
+// ## House rules (the host sets them before the first game; all off)
+//
+//   stack      SPARK +1 on a SPARK +1, PRISM +3 on either: the draws add up
+//              and the first player who cannot answer draws them all.
+//   snap       a number card with the same number as the top card may be
+//              played by anyone, out of turn ("snap!"); play goes on from them.
+//   pass       a PRISM (the plain one) also passes every hand on one seat.
 //   drawUntil  drawing goes on until you draw a card that plays.
 //
 // The setup only the first time (Lokesh, 2026-11-23, as Ludo): PLAY AGAIN
@@ -36,37 +45,36 @@
 //
 // ## A match
 //
-// One deal: the first out wins, everyone else is placed by the points left in
-// their hand (numbers at face value, action cards 20, PRISMs 50), fewest
-// first. The dealer — the first to play — goes round the table between
-// matches (docs/sdk-v2.md "Who starts").
+// One deal: the first out wins, everyone else is placed by how many cards
+// they still hold, fewest first (a tie shares the place). A player who left
+// is not placed. The dealer — the first to play — goes round the table
+// between matches (docs/sdk-v2.md "Who starts").
 
 (() => {
-	const SUITS = ["sun", "moon", "star", "bolt"];
-	const SUIT_NAMES = { sun: "Sun", moon: "Moon", star: "Star", bolt: "Bolt" };
-	const ACTIONS = ["zap", "block", "bounce"];
-	const FACE_NAMES = { zap: "ZAP +2", block: "BLOCK", bounce: "BOUNCE", prism: "PRISM", prism4: "PRISM +4" };
-	const HAND = 7;
+	const SUITS = ["nova", "comet", "crystal", "orbit", "eclipse"];
+	const SUIT_NAMES = { nova: "Nova", comet: "Comet", crystal: "Crystal", orbit: "Orbit", eclipse: "Eclipse" };
+	const NUMBERS = ["1", "2", "3", "4", "5", "6", "7", "8"];
+	const ACTIONS = ["spark", "echo", "gift"];
+	const FACE_NAMES = { spark: "SPARK +1", echo: "ECHO", gift: "GIFT", prism: "PRISM", prism3: "PRISM +3" };
+	const HAND = 5;
 	const LOG = 12; // events kept for the pages
-	const HOUSE = ["stack", "jumpIn", "sevenZero", "drawUntil"];
-	const HOUSE_NAMES = { stack: "Stack draws", jumpIn: "Jump in", sevenZero: "7 swaps, 0 rotates", drawUntil: "Draw until you can play" };
+	const HOUSE = ["stack", "snap", "pass", "drawUntil"];
+	const HOUSE_NAMES = { stack: "Stack sparks", snap: "Snap", pass: "Prisms pass hands", drawUntil: "Draw until you can play" };
 
-	/** The deck: card id → { s: suit or null, f: face }. Faces are "0"…"9", the actions, "prism" and "prism4". */
+	/** The deck: card id → { s: suit or null, f: face }. Faces are "1"…"8", the actions, "prism" and "prism3". */
 	const DECK = [];
 	for (const s of SUITS) {
-		for (let k = 0; k < 2; k++) for (let n = 0; n <= 9; n++) DECK.push({ s, f: String(n) });
-		for (const f of ACTIONS) for (let k = 0; k < 2; k++) DECK.push({ s, f });
+		for (const f of NUMBERS) DECK.push({ s, f });
+		for (const f of ACTIONS) DECK.push({ s, f });
 	}
-	for (let k = 0; k < 4; k++) DECK.push({ s: null, f: "prism" });
-	for (let k = 0; k < 4; k++) DECK.push({ s: null, f: "prism4" });
+	for (let k = 0; k < 3; k++) DECK.push({ s: null, f: "prism" });
+	for (let k = 0; k < 2; k++) DECK.push({ s: null, f: "prism3" });
 
 	const isWild = (id) => DECK[id].s === null;
 	const isNumber = (id) => /^\d$/.test(DECK[id].f);
-	/** What a card left in hand costs at the end. */
-	const pointsOf = (id) => (isWild(id) ? 50 : isNumber(id) ? Number(DECK[id].f) : 20);
 	const nameOf = (id) => (isWild(id) ? FACE_NAMES[DECK[id].f] : `${SUIT_NAMES[DECK[id].s]} ${FACE_NAMES[DECK[id].f] ?? DECK[id].f}`);
 	/** How many cards a draw card makes the next player take. */
-	const drawOf = (id) => (DECK[id].f === "zap" ? 2 : DECK[id].f === "prism4" ? 4 : 0);
+	const drawOf = (id) => (DECK[id].f === "spark" ? 1 : DECK[id].f === "prism3" ? 3 : 0);
 
 	/** A seeded generator whose state is one integer, so a snapshot carries it. */
 	function rng(state) {
@@ -113,11 +121,19 @@
 		const seatOf = (id) => s.seats.indexOf(id);
 		const active = (i) => !s.out[i];
 		const activeCount = () => s.seats.filter((_, i) => active(i)).length;
-		/** The next seat still playing from `i`, the way play goes. */
-		const after = (i, dir = s.dir) => {
+		/** The next seat still playing from `i`; play always goes the same way round. */
+		const after = (i) => {
 			const n = s.seats.length;
 			for (let k = 1; k <= n; k++) {
-				const j = (((i + dir * k) % n) + n) % n;
+				const j = (i + k) % n;
+				if (active(j)) return j;
+			}
+			return i;
+		};
+		const before = (i) => {
+			const n = s.seats.length;
+			for (let k = 1; k <= n; k++) {
+				const j = (((i - k) % n) + n) % n;
 				if (active(j)) return j;
 			}
 			return i;
@@ -145,25 +161,24 @@
 			return got;
 		}
 
-		/** Whether `id` may go on the pile now, on a turn (not a jump-in). */
+		/** Whether `id` may go on the pile now, on a turn. */
 		function plays(id) {
 			const c = DECK[id];
-			if (s.pending > 0) return s.pendingKind === "zap" ? c.f === "zap" || c.f === "prism4" : c.f === "prism4";
+			if (s.pending > 0) return s.pendingKind === "spark" ? c.f === "spark" || c.f === "prism3" : c.f === "prism3";
 			if (c.s === null) return true;
-			const t = DECK[top()];
-			return c.s === s.suit || c.f === t.f;
+			if (s.echo) return c.s === s.suit;
+			return c.s === s.suit || c.f === DECK[top()].f;
 		}
-		/** Whether `id` may jump in: identical to the top card, nothing owed. */
-		function jumps(id) {
-			if (!s.house.jumpIn || s.pending > 0 || isWild(id)) return false;
-			const t = DECK[top()];
-			return !isWild(top()) && DECK[id].s === t.s && DECK[id].f === t.f;
+		/** Whether `id` may be snapped in out of turn: a number, the same number as the top card, nothing owed. */
+		function snaps(id) {
+			if (!s.house.snap || s.pending > 0 || s.echo || !isNumber(id)) return false;
+			return isNumber(top()) && DECK[id].f === DECK[top()].f;
 		}
 		function legal(i) {
 			if (s.phase !== "play" || i < 0 || !active(i)) return [];
-			if (i !== s.turn) return s.hands[i].filter(jumps);
+			if (i !== s.turn) return s.hands[i].filter(snaps);
 			if (s.drawn !== null) return s.hands[i].includes(s.drawn) && plays(s.drawn) ? [s.drawn] : [];
-			return s.hands[i].filter(plays); // an identical card plays on a turn anyway (same face)
+			return s.hands[i].filter(plays);
 		}
 
 		/** What happened, for the pages to show: the newest few, numbered. */
@@ -176,59 +191,67 @@
 		function finish(i) {
 			s.phase = "over";
 			s.winner = i;
+			s.echo = false;
+		}
+
+		/** Seat `i` takes `n` and misses its turn (a draw card not answered). */
+		function penalise(i, n, by) {
+			const got = give(i, n);
+			event({ kind: "penalty", seat: i, count: got, by });
+			s.turn = after(i);
 		}
 
 		/** Play `id` from seat `i` (already checked): the card's effect, and whose turn it is next. */
-		function play(i, id, { suit, target, jump }) {
+		function play(i, id, { suit, gift, snap }) {
 			s.hands[i].splice(s.hands[i].indexOf(id), 1);
 			s.pile.push(id);
 			s.played++;
 			s.drawn = null;
+			s.echo = false;
 			const c = DECK[id];
 			s.suit = c.s ?? suit;
-			event({ kind: jump ? "jump" : "play", seat: i, card: id, suit: s.suit });
+			event({ kind: snap ? "snap" : "play", seat: i, card: id, suit: s.suit });
 			if (!s.hands[i].length) return finish(i);
-			if (s.house.sevenZero && c.f === "7") {
-				[s.hands[i], s.hands[target]] = [s.hands[target], s.hands[i]];
-				event({ kind: "swap", seat: i, target, card: id, suit: s.suit });
-			} else if (s.house.sevenZero && c.f === "0") {
-				// Every hand moves on one seat the way play goes.
+			const next = after(i);
+			if (c.f === "gift" && gift != null) {
+				s.hands[i].splice(s.hands[i].indexOf(gift), 1);
+				s.hands[next].push(gift);
+				event({ kind: "gift", seat: i, target: next, card: id, suit: s.suit });
+				if (!s.hands[i].length) return finish(i);
+			}
+			if (c.f === "prism" && s.house.pass) {
+				// Every hand moves on one seat, the way play goes.
 				const order = [];
-				for (let j = i, k = 0; k < s.seats.length; k++, j = after(j)) {
-					if (order.includes(j)) break;
-					order.push(j);
-				}
-				const before = order.map((j) => s.hands[j]);
-				order.forEach((j, k) => (s.hands[order[(k + 1) % order.length]] = before[k]));
-				event({ kind: "rotate", seat: i, card: id, suit: s.suit, dir: s.dir });
+				for (let j = i; !order.includes(j); j = after(j)) order.push(j);
+				const held = order.map((j) => s.hands[j]);
+				order.forEach((j, k) => (s.hands[order[(k + 1) % order.length]] = held[k]));
+				event({ kind: "pass", seat: i, card: id, suit: s.suit });
 			}
 			const draw = drawOf(id);
 			if (draw && s.house.stack) {
 				s.pending += draw;
-				s.pendingKind = c.f === "prism4" || s.pendingKind === "prism4" ? "prism4" : "zap";
-				s.turn = after(i);
-			} else if (draw) {
-				const next = after(i);
-				const got = give(next, draw);
-				event({ kind: "penalty", seat: next, count: got, by: i });
-				s.turn = after(next);
-			} else if (c.f === "block") {
-				s.turn = after(after(i));
-			} else if (c.f === "bounce") {
-				s.dir = -s.dir;
-				// With two playing, BOUNCE is a BLOCK: the same player goes again.
-				s.turn = activeCount() === 2 ? i : after(i);
-			} else s.turn = after(i);
+				s.pendingKind = c.f === "prism3" || s.pendingKind === "prism3" ? "prism3" : "spark";
+				s.turn = next;
+			} else if (draw) penalise(next, draw, i);
+			else if (c.f === "echo") {
+				// Again at once, in the same suit; on to the next if nothing can follow.
+				s.echo = true;
+				s.turn = i;
+				if (!s.hands[i].some(plays)) {
+					s.echo = false;
+					event({ kind: "pass", seat: i, quiet: true });
+					s.turn = next;
+				}
+			} else s.turn = next;
 		}
 
 		/** Seat `i` draws on its turn: what is owed, or one (until one plays, with drawUntil). */
 		function drawFor(i) {
 			if (s.pending > 0) {
-				const got = give(i, s.pending);
-				event({ kind: "penalty", seat: i, count: got });
+				const n = s.pending;
 				s.pending = 0;
 				s.pendingKind = null;
-				s.turn = after(i);
+				penalise(i, n);
 				return;
 			}
 			let got = 0;
@@ -254,7 +277,7 @@
 			const deck = shuffle(DECK.map((_, id) => id), r);
 			s.hands = s.seats.map((_, i) => (active(i) ? deck.splice(0, HAND) : []));
 			// The first card up is a number: an action or a PRISM goes back in.
-			let k = deck.findIndex((id) => isNumber(id));
+			const k = deck.findIndex((id) => isNumber(id));
 			const first = deck.splice(k, 1)[0];
 			s.draw = deck;
 			s.pile = [first];
@@ -265,14 +288,13 @@
 			event({ kind: "deal", seat: s.opener, card: first });
 		}
 
-		/** Hand points, and the ranking: the winner, then fewest points left, then whoever left. */
+		/** The ranking: the winner, then fewest cards left (ties together). A player who left is not placed. */
 		function standings() {
-			const pts = s.hands.map((h) => h.reduce((a, id) => a + pointsOf(id), 0));
+			const left = s.hands.map((h) => h.length);
 			const rest = s.seats.map((_, i) => i).filter((i) => i !== s.winner && active(i));
-			const levels = [...new Set(rest.map((i) => pts[i]))].sort((a, b) => a - b);
-			const gone = s.seats.map((_, i) => i).filter((i) => !active(i) && i !== s.winner);
-			const ranking = [...(s.winner != null ? [[s.winner]] : []), ...levels.map((p) => rest.filter((i) => pts[i] === p)), ...(gone.length ? [gone] : [])];
-			return { pts, ranking };
+			const levels = [...new Set(rest.map((i) => left[i]))].sort((a, b) => a - b);
+			const ranking = [...(s.winner != null ? [[s.winner]] : []), ...levels.map((n) => rest.filter((i) => left[i] === n))];
+			return { left, ranking };
 		}
 
 		// ------------------------------------------------------------ the bot
@@ -280,38 +302,32 @@
 		/** The suit a bot names: the one it holds most of. */
 		function bestSuit(hand, r) {
 			const n = Object.fromEntries(SUITS.map((x) => [x, 0]));
-			for (const id of hand) if (!isWild(id)) n[DECK[id].s] += 1 + pointsOf(id) / 40;
+			for (const id of hand) if (!isWild(id)) n[DECK[id].s]++;
 			const most = Math.max(...Object.values(n));
 			const best = SUITS.filter((x) => n[x] === most);
 			return best[r.int(best.length)];
 		}
-		/** The seat with the fewest cards other than `i` (a 7's target). */
-		function fewest(i) {
-			let best = -1;
-			s.seats.forEach((_, j) => {
-				if (j !== i && active(j) && (best < 0 || s.hands[j].length < s.hands[best].length)) best = j;
-			});
-			return best;
+		/** The card a bot gives away with a GIFT: a number of the suit it holds least of (never a PRISM, if it can help it). */
+		function giftOf(i, gift) {
+			const rest = s.hands[i].filter((id) => id !== gift);
+			if (!rest.length) return null;
+			const count = (suit) => rest.filter((id) => DECK[id].s === suit).length;
+			const score = (id) => (isWild(id) ? 100 : (isNumber(id) ? 0 : 10) + count(DECK[id].s));
+			return rest.reduce((a, b) => (score(b) < score(a) ? b : a));
 		}
 		/** How good playing `id` is for seat `i`: higher is better. */
 		function worth(i, id) {
 			const c = DECK[id];
-			const next = after(i);
-			const threat = s.hands[next].length <= 2; // the next player is close to out
-			let v = pointsOf(id) / 10; // shed the heavy cards first…
-			if (isWild(id)) v = s.hands[i].length <= 2 ? 6 : -4; // …but keep a PRISM for the end
-			if (c.f === "prism4") v += threat ? 9 : 1;
-			if (c.f === "zap" || c.f === "block") v += threat ? 8 : 1;
-			if (c.f === "bounce") v += threat ? 5 : 0.5;
-			if (c.s && c.s === s.suit) v += 0.5; // keep the suit we are in
-			if (s.house.sevenZero && c.f === "7") {
-				const t = fewest(i);
-				v += t >= 0 && s.hands[t].length < s.hands[i].length - 1 ? 7 : -6;
-			}
-			if (s.house.sevenZero && c.f === "0") {
-				const prev = after(i, -s.dir);
-				v += s.hands[prev].length < s.hands[i].length - 1 ? 5 : -3;
-			}
+			const threat = s.hands[after(i)].length <= 2; // the next player is close to out
+			const mine = s.hands[i].length;
+			let v = isNumber(id) ? 1 + Number(c.f) / 10 : 2;
+			if (isWild(id)) v = mine <= 2 ? 6 : -4; // keep a PRISM for the end
+			if (c.f === "prism3") v += threat ? 9 : 1;
+			if (c.f === "spark") v += threat ? 7 : 1;
+			if (c.f === "gift") v += mine > 2 ? 3 : 1; // two cards gone in one turn
+			if (c.f === "echo") v += s.hands[i].some((x) => x !== id && DECK[x].s === c.s) ? 3 : -1;
+			if (c.s && c.s === s.suit) v += 0.5;
+			if (c.f === "prism" && s.house.pass) v += s.hands[before(i)].length < mine - 1 ? 6 : -4;
 			return v;
 		}
 		function botMove(i) {
@@ -319,19 +335,23 @@
 			const opts = (id) => {
 				const o = { play: id };
 				if (isWild(id)) o.suit = bestSuit(s.hands[i].filter((x) => x !== id), r);
-				if (s.house.sevenZero && DECK[id].f === "7" && s.hands[i].length > 1) o.target = fewest(i);
+				if (DECK[id].f === "gift") {
+					const g = giftOf(i, id);
+					if (g != null) o.gift = g;
+				}
 				return o;
 			};
+			const best = (list) => list.reduce((a, b) => (worth(i, b) > worth(i, a) ? b : a));
 			if (s.drawn !== null) {
 				if (!plays(s.drawn)) return { pass: true };
-				// Keep a drawn PRISM unless it would end the game soon.
-				if (isWild(s.drawn) && s.hands[i].length > 3 && DECK[s.drawn].f === "prism") return { pass: true };
+				// Keep a drawn PRISM unless the end is near.
+				if (DECK[s.drawn].f === "prism" && s.hands[i].length > 3) return { pass: true };
 				return opts(s.drawn);
 			}
 			const can = s.hands[i].filter(plays);
+			if (s.echo) return can.length ? opts(best(can)) : { pass: true };
 			if (!can.length) return { draw: true };
-			const best = can.reduce((a, b) => (worth(i, b) > worth(i, a) ? b : a));
-			return opts(best);
+			return opts(best(can));
 		}
 
 		/** One move by `by`: nothing when allowed, else the reason. */
@@ -355,30 +375,34 @@
 				const id = a.play;
 				if (!Number.isInteger(id) || !s.hands[me].includes(id)) return "that card is not in your hand";
 				const onTurn = me === s.turn;
-				const jump = !onTurn;
 				if (onTurn) {
 					if (s.drawn !== null && id !== s.drawn) return "play the card you drew, or pass";
-					if (!plays(id)) return s.pending > 0 ? `answer with a draw card, or draw ${s.pending}` : "that card does not play";
-				} else if (!jumps(id)) return "not your turn";
+					if (!plays(id)) return s.pending > 0 ? `answer with a draw card, or draw ${s.pending}` : s.echo ? `ECHO: a ${SUIT_NAMES[s.suit]} card or a PRISM, or pass` : "that card does not play";
+				} else if (!snaps(id)) return "not your turn";
 				if (isWild(id) && !SUITS.includes(a.suit)) return "pick a suit";
-				let target = null;
-				if (s.house.sevenZero && DECK[id].f === "7" && s.hands[me].length > 1) {
-					target = a.target;
-					if (!Number.isInteger(target) || target === me || target < 0 || target >= s.seats.length || !active(target)) return "pick who to swap hands with";
+				let gift = null;
+				if (DECK[id].f === "gift" && s.hands[me].length > 1) {
+					gift = a.gift;
+					if (!Number.isInteger(gift) || gift === id || !s.hands[me].includes(gift)) return "pick a card to give";
 				}
-				if (jump) s.drawn = null;
-				play(me, id, { suit: a.suit, target, jump });
+				if (!onTurn) {
+					s.drawn = null;
+					s.echo = false;
+				}
+				play(me, id, { suit: a.suit, gift, snap: !onTurn });
 				return;
 			}
 			if (me !== s.turn) return "not your turn";
 			if (a.draw === true) {
 				if (s.drawn !== null) return "play the card you drew, or pass";
+				if (s.echo) return "ECHO: play a card of the same suit, or pass";
 				drawFor(me);
 				return;
 			}
 			if (a.pass === true) {
-				if (s.drawn === null) return "draw first";
+				if (s.drawn === null && !s.echo) return "draw first";
 				s.drawn = null;
+				s.echo = false;
 				event({ kind: "pass", seat: me });
 				s.turn = after(me);
 				return;
@@ -422,13 +446,13 @@
 					draw: [],
 					pile: [],
 					suit: null,
-					dir: 1,
 					turn: opener,
 					opener,
 					openerId: ids[opener] ?? null,
 					pending: 0,
 					pendingKind: null,
 					drawn: null,
+					echo: false, // an ECHO was played: the same player again, in its suit
 					winner: null,
 					last: null,
 					log: [],
@@ -442,9 +466,9 @@
 
 			apply({ action, by }) {
 				const why = move(action, by);
-				// A bot still on turn after its own move (it drew a card that
-				// plays, or BOUNCEd with two playing) moves on here: the platform
-				// asks a bot once per turn it sees begin, and would not ask again.
+				// A bot still on turn after its own move (an ECHO, a drawn card that
+				// plays) moves on here. The platform re-asks such a bot since
+				// platform-fixes; this stays for shells cached before them.
 				const me = seatOf(by);
 				for (let k = 0; why == null && k < 4 && me >= 0 && s.bots[me] && s.phase === "play" && s.turn === me; k++) move(botMove(me), by);
 				return why;
@@ -464,11 +488,11 @@
 					you,
 					turn: s.turn,
 					opener: s.opener,
-					dir: s.dir,
 					top: s.pile.length ? top() : null,
 					suit: s.suit,
 					pending: s.pending,
 					pendingKind: s.pendingKind,
+					echo: s.echo,
 					hand: you >= 0 ? [...s.hands[you]] : [],
 					counts: s.hands.map((h) => h.length),
 					drawCount: s.draw.length,
@@ -478,9 +502,9 @@
 					last: s.last && { ...s.last },
 					log: s.log.map((e) => ({ ...e })),
 					winner: s.winner,
-					// At the end every hand is shown, with what it was worth.
+					// At the end every hand is shown, and how many cards each held (none for a seat that left).
 					hands: over ? s.hands.map((h) => [...h]) : null,
-					points: st ? st.pts : null,
+					left: st ? st.left.map((n, i) => (active(i) ? n : null)) : null,
 				};
 			},
 
@@ -494,12 +518,13 @@
 
 			result() {
 				if (s.phase !== "over") return null;
-				const { pts, ranking } = standings();
+				const { left, ranking } = standings();
 				const on = HOUSE.filter((k) => s.house[k]).map((k) => HOUSE_NAMES[k]);
 				return {
 					kind: "ffa",
 					ranking: ranking.map((slot) => slot.map((i) => s.seats[i])),
-					scores: Object.fromEntries(s.seats.map((id, i) => [id, pts[i]])),
+					// Cards left, for the placed only: a player who left has no score (not 0, the best).
+					scores: Object.fromEntries(ranking.flat().map((i) => [s.seats[i], left[i]])),
 					details: [
 						{ label: "Cards played", value: s.played },
 						{ label: "House rules", value: on.length ? on.join(", ").slice(0, 40) : "none" },
@@ -515,14 +540,19 @@
 					drawFor(i);
 					return true;
 				}
-				if (s.drawn === null) give(i, 1);
+				if (s.drawn === null && !s.echo) give(i, 1);
 				s.drawn = null;
+				s.echo = false;
 				event({ kind: "pass", seat: i });
 				s.turn = after(i);
 				return true;
 			},
 
-			/** A player left for good: their cards go under the draw pile; one player left wins. */
+			/**
+			 * A player left for good: their cards go under the draw pile; one
+			 * player left wins. If it was their turn, what they owed goes with
+			 * them (review, 2026-11-24: the debt passed on to the next player).
+			 */
 			leave({ seat }) {
 				const i = seatOf(seat);
 				if (i < 0 || s.out[i]) return false;
@@ -536,6 +566,9 @@
 				}
 				if (s.turn === i) {
 					s.drawn = null;
+					s.echo = false;
+					s.pending = 0;
+					s.pendingKind = null;
 					s.turn = after(i);
 				}
 				return true;
@@ -563,5 +596,5 @@
 		};
 	}
 
-	globalThis.glowdownRules = { SUITS, SUIT_NAMES, ACTIONS, FACE_NAMES, HAND, HOUSE, HOUSE_NAMES, DEFAULT_HOUSE, cleanHouse, DECK, isWild, isNumber, pointsOf, nameOf, drawOf, rng, shuffle, game };
+	globalThis.glowdownRules = { SUITS, SUIT_NAMES, NUMBERS, ACTIONS, FACE_NAMES, HAND, HOUSE, HOUSE_NAMES, DEFAULT_HOUSE, cleanHouse, DECK, isWild, isNumber, nameOf, drawOf, rng, shuffle, game };
 })();

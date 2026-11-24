@@ -6,7 +6,9 @@
 //
 //   emoji | name/other name | clue; clue; clue
 //
-// Only single emoji widely drawn on phones (no joined sequences). The pools
+// Only single emoji from Emoji 11 or older (no joined sequences): newer ones
+// show as empty boxes on Android 9 and older (review, 2026-11-24), and the
+// page names any its phone cannot draw. The pools
 // are dealt with no repeats until a category is spent (guess-what-rules.js),
 // so the more the better; test-guess-what.mjs checks that no bot clue gives
 // its picture away and no emoji appears twice.
@@ -70,15 +72,12 @@
 🐿️|squirrel|gathers nuts; bushy tail; climbs trees
 🦜|parrot|talks; colourful; sits on a pirate's shoulder
 🦢|swan|graceful; white; glides on a lake
-🦩|flamingo|pink; stands on one leg; long legs
 🦚|peacock|fans its tail; feathers with eyes; national bird of India
 🐓|rooster/cockerel|crows at dawn; farm; comb on its head
 🦃|turkey|gobble; Thanksgiving; wattle
 🐑|sheep/lamb|wool; baa; flock
 🐐|goat|horns; climbs rocks; beard
 🦌|deer/reindeer|antlers; Bambi; forest
-🦥|sloth|very slow; hangs from branches; lazy
-🦦|otter|floats on its back; river; holds hands
 🦙|llama/alpaca|spits; Peru; woolly
 🦛|hippo/hippopotamus|huge mouth; river; Africa
 🦏|rhino/rhinoceros|horn on its nose; thick skin; charges
@@ -105,8 +104,6 @@
 🥦|broccoli|looks like a tiny tree; green; vegetable
 🍄|mushroom/toadstool|fungus; pizza topping; grows in the forest
 🥔|potato|mash; underground; chips
-🧅|onion|makes you cry; layers; pyaaz
-🧄|garlic|keeps vampires away; cloves; strong smell
 🌶️|chilli/chili/pepper|hot; spicy; mirchi
 🥒|cucumber|salad; cool; pickle
 🍅|tomato|red; ketchup; salad
@@ -147,7 +144,6 @@
 🍿|popcorn|movies; butter; pops
 🥛|milk|glass; white; from a cow
 ☕|coffee/tea|hot cup; caffeine; morning
-🧃|juice/juice box|straw; carton; school lunch
 🍹|cocktail/mocktail|little umbrella; tropical drink; party
 🧂|salt|shaker; sprinkle; seasoning
 🥜|peanuts/peanut|shell; elephants love them; butter`,
@@ -166,7 +162,6 @@
 🔑|key|lock; door; opens
 🔒|lock/padlock|key; secure; closed
 🔨|hammer|nails; bang; tool
-🪓|axe/ax|chop; wood; lumberjack
 🔧|spanner/wrench|bolts; tool; plumber
 ✂️|scissors|cut; paper; two blades
 📏|ruler/scale|measure; straight line; centimetres
@@ -180,7 +175,6 @@
 🎁|gift/present|wrapped; ribbon; birthday
 🎈|balloon|float; pop; party
 🧸|teddy bear/teddy|soft toy; hug; cuddly
-🪑|chair|sit; four legs; table
 🛏️|bed|sleep; pillow; blanket
 🛁|bathtub/bath/tub|bubbles; soak; tap water
 🚿|shower|water spray; bathroom; wash
@@ -219,7 +213,6 @@
 🔭|telescope|stars; lens; astronomer
 🔬|microscope|tiny things; lab; lens
 💊|pill/medicine/tablet|doctor; swallow; capsule
-🩹|bandage/plaster|cut; wound; stick it on
 🧷|safety pin|nappy; clasp; sharp`,
 		play: `
 ⚽|football/soccer|goal; kick; FIFA
@@ -257,7 +250,6 @@
 🎻|violin|bow; strings; orchestra
 🥁|drum/drums|beat; sticks; rhythm
 🎷|saxophone/sax|jazz; reed; curved
-🪕|banjo|country music; strings; round
 🎤|microphone/mic|sing; karaoke; stage
 🎧|headphones/headset|ears; music; listen
 🎬|clapperboard/movie/film|action; cut; director
@@ -267,14 +259,12 @@
 🎡|ferris wheel|fair; ride; London Eye
 🎢|roller coaster|loop; scream; theme park
 🎠|carousel/merry-go-round|horses; spin; fair
-🪁|kite|wind; string; fly it
 🛹|skateboard|wheels; tricks; ramp
 🛷|sled/sledge|snow; slide; winter
 🏆|trophy/cup|winner; gold; prize
 🥇|gold medal/medal|first place; Olympics; winner
 🧗|climbing/climber|rock wall; rope; harness
 🎣|fishing|rod; hook; catch
-🪀|yo-yo/yoyo|string; up and down; toy
 🏹|bow and arrow/archery|target; string; Robin Hood`,
 		travel: `
 🚗|car|drive; wheels; road
@@ -310,7 +300,6 @@
 🏛️|museum/columns|Greece; history; marble
 🕌|mosque|dome; minaret; prayer
 ⛪|church|bells; cross; Sunday
-🛕|hindu temple/temple/mandir|puja; gods; tower
 🏥|hospital|doctor; nurse; sick
 🏫|school|class; teacher; students
 🏦|bank|money; vault; ATM
@@ -347,7 +336,6 @@
 🔥|fire/flame|hot; burn; smoke
 💧|drop/droplet/water drop|wet; tear; drip
 🌍|earth/globe/world|planet; continents; home
-🪐|saturn/planet|rings; gas giant; space
 ☄️|comet|tail; space; shooting
 🌡️|thermometer|temperature; fever; hot or cold
 🌱|seedling/sprout|grows; new life; plant it
@@ -371,7 +359,6 @@
 🌕|full moon|round; night; werewolf
 🌫️|fog/mist|can't see; grey; morning
 💨|wind/gust|blow; breeze; whoosh
-🧊|ice/ice cube|cold; frozen; drink
 🦠|germ/microbe/virus|tiny; sick; bacteria
 🕸️|spider web/cobweb|sticky; Halloween; catches flies
 🌿|herb|green; leaves; cooking
@@ -381,14 +368,20 @@
 
 	const NAMES = { animals: "Animals", food: "Food", things: "Things", play: "Sport & play", travel: "Travel & places", nature: "Nature & sky" };
 
-	/** Every picture: { key, cat, e, name, names, words, clues }. `words`: what a clue may not say. */
+	/** Words that join a name's words ("bow and arrow"), never names themselves. */
+	const JOINING = new Set(["and", "the", "for", "with", "off"]);
+	/** Every picture: { key, cat, e, name, names, words, squash, clues }. `words` and `squash`: what a clue may not say. */
 	const ALL = [];
 	for (const [cat, text] of Object.entries(RAW)) {
 		for (const line of text.trim().split("\n")) {
 			const [e, names, clues] = line.split("|").map((x) => x.trim());
 			const list = names.split("/").map((x) => x.trim());
-			const words = [...new Set(list.flatMap((n) => [n.toLowerCase().replace(/[^a-z ]/g, ""), ...n.toLowerCase().split(/[^a-z]+/)]).filter((w) => w.replace(/ /g, "").length >= 3))];
-			ALL.push({ key: `${cat}:${e}`, cat, e, name: list[0], names: list, words, clues: clues.split(";").map((x) => x.trim()) });
+			// What a clue may not say: each word of each name, whole (joining
+			// words like "and" left out), and — for the long ones — the name run
+			// together, so "e l e p h a n t" is caught but "rainbow" is not "bow".
+			const words = [...new Set(list.flatMap((n) => n.toLowerCase().split(/[^a-z]+/)).filter((w) => w.length >= 3 && !JOINING.has(w)))];
+			const squash = [...new Set([...words, ...list.map((n) => n.toLowerCase().replace(/[^a-z]/g, ""))].filter((w) => w.length >= 5))];
+			ALL.push({ key: `${cat}:${e}`, cat, e, name: list[0], names: list, words, squash, clues: clues.split(";").map((x) => x.trim()) });
 		}
 	}
 	const CATEGORIES = Object.keys(RAW).map((id) => ({ id, name: NAMES[id], count: ALL.filter((p) => p.cat === id).length }));

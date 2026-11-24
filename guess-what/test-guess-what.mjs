@@ -42,7 +42,30 @@ check("no picture twice", new Set(ALL.map((p) => p.e)).size === ALL.length && ne
 const leaks = ALL.flatMap((p) => p.clues.filter((c) => clueProblem(c, p)).map((c) => `${p.e} ${c}`));
 check("every picture has three bot clues, none giving it away", ALL.every((p) => p.clues.length === 3) && !leaks.length, leaks.join("; "));
 const dog = ALL.find((p) => p.name === "dog");
-check("a clue may not say the name or another name", clueProblem("a cute puppy", dog) === "that gives it away" && clueProblem("DOG house", dog) === "that gives it away" && clueProblem("d o g", dog) === "that gives it away");
+check("a clue may not say the name or another name", clueProblem("a cute puppy", dog) === "that gives it away" && clueProblem("DOG house", dog) === "that gives it away");
+check("…nor its plural", clueProblem("dogs bark", dog) === "that gives it away" && clueProblem("two puppies", dog) === "that gives it away");
+const elephant = ALL.find((p) => p.name === "elephant");
+check("…nor a long name spelt out with spaces or hyphens", clueProblem("e l e p h a n t", elephant) === "that gives it away" && clueProblem("ele-phant", elephant) === "that gives it away");
+const of = (name) => ALL.find((p) => p.name === name);
+// Review, 2026-11-24: whole words only, so innocent clues get through.
+for (const [clue, name] of [
+	["Robin Hood's hand weapon", "bow and arrow"],
+	["rainbow shaped", "bow and arrow"],
+	["nice and cold", "ice cream"],
+	["bowl-eyed night bird", "owl"],
+	["breakfast in Japan", "fried egg"],
+	["a cartoon character", "cat"],
+]) check(`an innocent clue gets through: "${clue}" (${name})`, clueProblem(clue, of(name)) === null, clueProblem(clue, of(name)));
+check("…while the name inside a clue is still caught: 'ice-cream cone'", clueProblem("ice-cream cone", of("ice cream")) === "that gives it away");
+check("joining words are not names: 'and' is not forbidden for bow and arrow", !of("bow and arrow").words.includes("and"));
+// Review, 2026-11-24: emoji newer than Emoji 11 show as empty boxes on Android 9 and older.
+const newer = (e) => {
+	const cp = e.codePointAt(0);
+	const ranges = [[0x1f6d5, 0x1f6d7], [0x1f6fa, 0x1f6fc], [0x1f7e0, 0x1f7f0], [0x1f90c, 0x1f90f], [0x1f93f, 0x1f93f], [0x1f971, 0x1f972], [0x1f977, 0x1f978], [0x1f97b, 0x1f97b], [0x1f9a3, 0x1f9a4], [0x1f9a5, 0x1f9af], [0x1f9ba, 0x1f9bf], [0x1f9c3, 0x1f9cb], [0x1f9cd, 0x1f9cf], [0x1fa70, 0x1faff]];
+	return ranges.some(([a, b]) => cp >= a && cp <= b);
+};
+const late = ALL.filter((p) => newer(p.e)).map((p) => `${p.e} ${p.name}`);
+check("no picture newer than Emoji 11 (Android 9 draws them all)", !late.length, late.join(", "));
 check("…nor be an emoji, empty or long", clueProblem("🐶", dog) === "words only" && clueProblem("   ", dog) === "say something" && clueProblem("x".repeat(31), dog) === "at most 30 letters");
 check("…but anything else goes", clueProblem("barks at the postman", dog) === null);
 
@@ -297,7 +320,7 @@ console.log("\nhandover mid-round, and leaving");
 	pass(g, READY_MS);
 	g.apply({ action: { clue: "first one" }, by: "p1" });
 	t += 10_000;
-	const heir = game({ now: () => t + 50_000 }); // a phone whose clock reads differently
+	const heir = game({ now }); // taken over at once
 	heir.restore({ snapshot: JSON.parse(JSON.stringify(g.snapshot())) });
 	const hv = heir.view({ seat: "p1" });
 	const gv = g.view({ seat: "p1" });
@@ -310,6 +333,46 @@ console.log("\nhandover mid-round, and leaving");
 	check("…and they are passed over", g.view({ seat: null }).guesser === 1);
 	g.leave({ seat: "p2" });
 	check("fewer than two left: the game ends", g.view({ seat: null }).phase === "over");
+}
+
+console.log("\nturns stay equal when someone leaves; an heir keeps the time that ran");
+{
+	// Review, 2026-11-24: after a leaver the rotation went on for the old count.
+	const g = game({ now, last: () => ({ secs: 30, turns: 2 }) });
+	g.init({ seats: people(3), seed: 4, match: 0, first: "p0" });
+	g.apply({ action: { opts: { secs: 30, turns: 2 } }, by: "p0" });
+	g.apply({ action: { start: true }, by: "p0" });
+	const guessed = [];
+	let left = false;
+	for (let k = 0; k < 60 && g.view({ seat: null }).phase !== "over"; k++) {
+		const w = g.view({ seat: null });
+		if (w.phase === "ready" && guessed.at(-1)?.round !== w.round) guessed.push({ round: w.round, g: w.guesser });
+		if (!left && w.round === 1 && w.phase === "ready") {
+			left = true;
+			g.leave({ seat: `p${w.guesser}` });
+			continue;
+		}
+		pass(g, 31_000);
+	}
+	const count = (i) => guessed.filter((x) => x.g === i).length;
+	const who = guessed[1].g;
+	const stay = [0, 1, 2].filter((i) => i !== who);
+	check("a player leaves on their turn: those left still guess the same number of times (two each)", g.view({ seat: null }).phase === "over" && stay.every((i) => count(i) === 2), JSON.stringify(guessed));
+	check("…and the rounds counted down to it", g.view({ seat: null }).total === 5, String(g.view({ seat: null }).total));
+	// Review, 2026-11-24: an heir restored a round with all its time back.
+	const h = game({ now });
+	h.init({ seats: people(3), seed: 5, match: 0, first: "p0" });
+	h.apply({ action: { opts: { secs: 30 } }, by: "p0" });
+	h.apply({ action: { start: true }, by: "p0" });
+	pass(h, READY_MS);
+	const snap = JSON.parse(JSON.stringify(h.snapshot())); // the last copy the heir got: 30 s left then
+	const later = t + 12_000; // twelve seconds on, the host is gone
+	const heir = game({ now: () => later });
+	heir.restore({ snapshot: snap });
+	check("an heir takes over with the time that has run since its copy taken off (18 s of 30 left, not 30)", heir.view({ seat: null }).msLeft === 18_000, String(heir.view({ seat: null }).msLeft));
+	const skewed = game({ now: () => t + 3_600_000 });
+	skewed.restore({ snapshot: snap });
+	check("…an heir whose clock is far off (an hour) keeps the time the copy had rather than none", skewed.view({ seat: null }).msLeft === 30_000, String(skewed.view({ seat: null }).msLeft));
 }
 
 console.log(failures ? `\n${failures} failing` : "\nall passing");

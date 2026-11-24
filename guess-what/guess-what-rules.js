@@ -92,11 +92,14 @@
 		const t = text.trim().replace(/\s+/g, " ");
 		if (!t) return "say something";
 		if (t.length > CLUE_MAX) return `at most ${CLUE_MAX} letters`;
-		const flat = t.toLowerCase().replace(/[^a-z ]/g, "");
-		const squashed = flat.replace(/ /g, "");
-		for (const w of item.words) {
-			if (flat.includes(w) || squashed.includes(w.replace(/ /g, ""))) return "that gives it away";
-		}
+		// Whole words only, with their plurals (review, 2026-11-24: "hand" is
+		// not "and", "rainbow" not "bow"); a long name run together is caught
+		// anywhere ("e l e p h a n t", "ele-phant").
+		const tokens = t.toLowerCase().split(/[^a-z]+/).filter(Boolean);
+		const forms = (w) => [w, `${w}s`, `${w}es`, ...(w.endsWith("y") ? [`${w.slice(0, -1)}ies`] : [])];
+		for (const w of item.words) if (tokens.some((tok) => forms(w).includes(tok))) return "that gives it away";
+		const squashed = tokens.join("");
+		for (const w of item.squash ?? []) if (squashed.includes(w)) return "that gives it away";
 		if ([...t].some((ch) => ch === item.e || /\p{Extended_Pictographic}/u.test(ch))) return "words only";
 		return null;
 	}
@@ -173,10 +176,8 @@
 				s.deadline = 0;
 				return;
 			}
-			// The guesser: this round's in the rotation, passing over anyone who left.
-			let g = s.order[s.round % s.order.length];
-			for (let k = 0; s.gone[g] && k < s.order.length; k++) g = s.order[(s.round + k + 1) % s.order.length];
-			s.guesser = g;
+			// The guesser: this round's in the queue (a leaver's turns are taken out of it).
+			s.guesser = s.queue[s.round];
 			const r = rng(s.rng);
 			if (s.mode === "phones") {
 				s.item = draw(r);
@@ -285,7 +286,9 @@
 			const at = s.players.findIndex((i) => i >= s.opener);
 			const k = at < 0 ? 0 : at;
 			s.order = [...s.players.slice(k), ...s.players.slice(0, k)];
-			s.total = s.players.length * s.opts.turns;
+			// Every round's guesser, in turn: the rotation, as many times as turns each.
+			s.queue = Array.from({ length: s.opts.turns }, () => s.order).flat();
+			s.total = s.queue.length;
 			s.scores = Object.fromEntries(s.players.map((i) => [i, 0]));
 			s.round = -1;
 			nextRound();
@@ -331,6 +334,7 @@
 					mode: null,
 					players: [],
 					order: [],
+					queue: [], // each round's guesser
 					round: -1,
 					total: 0,
 					guesser: null,
@@ -459,6 +463,8 @@
 					picture,
 					category: item ? item.cat : null,
 					choices: s.mode === "phones" ? s.choices.map((i) => P.ALL[i].e) : [],
+					// Their names, for a phone that cannot draw a picture: it shows the name instead.
+					choiceNames: s.mode === "phones" ? s.choices.map((i) => P.ALL[i].name) : [],
 					struck: [...s.struck],
 					clues: s.clues.map((c) => ({ ...c })),
 					scores: { ...s.scores },
@@ -498,6 +504,9 @@
 				if (i < 0 || s.gone[i]) return false;
 				s.gone[i] = true;
 				if (s.phase === "setup" || s.phase === "over") return true;
+				// Their turns still to come go, so everyone left guesses as often (review, 2026-11-24).
+				s.queue = s.queue.filter((g, k) => k <= s.round || g !== i);
+				s.total = s.queue.length;
 				if (i === s.guesser && (s.phase === "guess" || s.phase === "ready")) {
 					if (s.mode === "phones" && s.phase === "guess") reveal(false);
 					else nextRound();
@@ -532,12 +541,18 @@
 			// Clocks differ between phones: the heir gets the time left.
 			snapshot: () => {
 				const t = now();
-				return JSON.parse(JSON.stringify({ s: { ...s, deadline: 0, startAt: 0 }, left: s.deadline ? s.deadline - t : null, since: s.startAt ? t - s.startAt : null, seen: [...seen] }));
+				// `taken`: when, so an heir that takes over later counts the time run since (review, 2026-11-24).
+				return JSON.parse(JSON.stringify({ s: { ...s, deadline: 0, startAt: 0 }, left: s.deadline ? s.deadline - t : null, since: s.startAt ? t - s.startAt : null, taken: t, seen: [...seen] }));
 			},
 			restore({ snapshot }) {
 				const c = JSON.parse(JSON.stringify(snapshot));
 				const t = now();
-				s = { ...c.s, deadline: c.left == null ? 0 : t + c.left, startAt: c.since == null ? 0 : t - c.since };
+				// The time run since the copy was taken, by this phone's clock; a clock
+				// that disagrees wildly (behind, or more than five minutes on) is not
+				// trusted, and the copy's own time left stands.
+				const ran = Number.isFinite(c.taken) ? t - c.taken : 0;
+				const since = ran >= 0 && ran <= 300_000 ? ran : 0;
+				s = { ...c.s, deadline: c.left == null ? 0 : t + Math.max(0, c.left - since), startAt: c.since == null ? 0 : t - c.since - since };
 				seen = new Set(c.seen ?? []);
 			},
 		};
