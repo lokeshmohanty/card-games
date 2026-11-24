@@ -236,8 +236,13 @@ const MARKS = [
 	'<path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
 	'<path d="M5.5 3.7h5l2.5 4.3-2.5 4.3h-5L3 8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
 ];
+// A seat's mark is its player's colour (the platform's seat colours: picked
+// in the party, no two alike; seat order on an older shell), with its own
+// shape inside, so seats never differ by colour alone. Suits keep theirs.
+let seatCols = [];
+const seatIdx = (seat) => seatCols[seat] ?? seat % 8;
 function seatMark(seat) {
-	const m = svg(`<circle cx="8" cy="8" r="7.5" fill="var(--p${(seat % 8) + 1})"/><g style="color: var(--bg)">${MARKS[seat % 8]}</g>`, "0 0 16 16");
+	const m = svg(`<circle cx="8" cy="8" r="7.5" fill="var(--p${seatIdx(seat) + 1})"/><g style="color: var(--bg)">${MARKS[seat % 8]}</g>`, "0 0 16 16");
 	m.dataset.mark = String(seat % 8);
 	return m;
 }
@@ -627,6 +632,7 @@ function render() {
 function onView({ state }) {
 	const before = view;
 	view = state;
+	seatCols = arcade.seatColors?.(state.seats ?? []) ?? [];
 	if (!before || before.match !== state.match) {
 		shownLog = 0;
 		lastTop = null;
@@ -668,4 +674,4 @@ addEventListener("resize", render);
 new ResizeObserver(() => render()).observe(stage);
 
 /** For the tests: the view, whether it is this phone's turn, and any pick open. */
-arcade.debug = () => ({ ...(view ?? { seats: [], hand: [], legal: [] }), myTurn: myTurn(), picking: picking && { ...picking }, host: amHost(), kept: lastHouse && { ...lastHouse } });
+arcade.debug = () => ({ ...(view ?? { seats: [], hand: [], legal: [] }), colors: (view?.seats ?? []).map((_, i) => seatIdx(i)), myTurn: myTurn(), picking: picking && { ...picking }, host: amHost(), kept: lastHouse && { ...lastHouse } });

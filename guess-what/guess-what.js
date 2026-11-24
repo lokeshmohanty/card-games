@@ -140,11 +140,16 @@ const MARKS = [
 	'<path d="M8 3.5v9M3.5 8h9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>',
 	'<path d="M5.5 3.7h5l2.5 4.3-2.5 4.3h-5L3 8z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>',
 ];
+// A seat's mark is its player's colour (the platform's seat colours: picked
+// in the party, no two alike; seat order on an older shell), with its own
+// shape inside, so seats never differ by colour alone. Suits keep theirs.
+let seatCols = [];
+const seatIdx = (seat) => seatCols[seat] ?? seat % 8;
 function seatMark(seat) {
 	const m = document.createElementNS(NS, "svg");
 	m.setAttribute("viewBox", "0 0 16 16");
 	m.setAttribute("aria-hidden", "true");
-	m.innerHTML = `<circle cx="8" cy="8" r="7.5" fill="var(--p${(seat % 8) + 1})"/><g style="color: var(--bg)">${MARKS[seat % 8]}</g>`;
+	m.innerHTML = `<circle cx="8" cy="8" r="7.5" fill="var(--p${seatIdx(seat) + 1})"/><g style="color: var(--bg)">${MARKS[seat % 8]}</g>`;
 	m.dataset.mark = String(seat % 8);
 	return m;
 }
@@ -306,7 +311,8 @@ function cluesBox(limit) {
 }
 function fillClues(box) {
 	const list = view.clues.slice(-Number(box.dataset.limit));
-	const key = list.map((c) => c.n).join(",");
+	// The seats' colours too: a clue's mark follows a pick.
+	const key = list.map((c) => c.n).join(",") + "|" + seatCols.join();
 	if (box.dataset.key === key) return;
 	box.dataset.key = key;
 	box.replaceChildren(...(list.length ? list.map(clueRow) : [el("div", "gw-none", iGuess() ? "Listen for clues — or read them here as they come." : "No typed clues yet.")]));
@@ -613,6 +619,7 @@ let lastSeen = -1;
 arcade.on("view", ({ state }) => {
 	const before = view;
 	view = state;
+	seatCols = arcade.seatColors?.(state.seats ?? []) ?? [];
 	endsAt = state.msLeft == null ? 0 : performance.now() + state.msLeft;
 	dueAt = state.msNext == null ? 0 : Date.now() + state.msNext + 30;
 	if (!before || before.phase !== state.phase || before.match !== state.match) mainKey = "";
@@ -642,4 +649,4 @@ addEventListener("resize", () => {
 });
 
 /** For the tests: the view, and whether this phone is guessing. */
-arcade.debug = () => ({ ...(view ?? { seats: [], players: [], choices: [], clues: [] }), iGuess: iGuess(), host: amHost(), kept: lastOpts && { ...lastOpts }, rebuilds: rebuilds.length, lastBuilt: rebuilds.slice(-3) });
+arcade.debug = () => ({ ...(view ?? { seats: [], players: [], choices: [], clues: [] }), colors: (view?.seats ?? []).map((_, i) => seatIdx(i)), iGuess: iGuess(), host: amHost(), kept: lastOpts && { ...lastOpts }, rebuilds: rebuilds.length, lastBuilt: rebuilds.slice(-3) });
