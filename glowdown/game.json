@@ -25,6 +25,71 @@
     "party"
   ],
   "preview": "preview.gif",
+  "achievements": [
+    {
+      "id": "first-win",
+      "title": "First Win",
+      "description": "Be the first to play out your hand.",
+      "glyph": "🏁",
+      "when": {
+        "won": true
+      }
+    },
+    {
+      "id": "beat-3",
+      "title": "Beat 3 Bots",
+      "description": "Win against 3 or more bots.",
+      "glyph": "🤖",
+      "when": {
+        "won": true,
+        "bots": {
+          ">=": 3
+        }
+      }
+    },
+    {
+      "id": "full-table",
+      "title": "Full Table",
+      "description": "Win against 7 bots.",
+      "glyph": "👑",
+      "when": {
+        "won": true,
+        "bots": {
+          ">=": 7
+        }
+      }
+    },
+    {
+      "id": "hat-trick",
+      "title": "Hat Trick",
+      "description": "Win 3 games in a row.",
+      "glyph": "🎩",
+      "when": {
+        "won": true
+      },
+      "streak": 3
+    },
+    {
+      "id": "five-in-a-row",
+      "title": "5 in a Row",
+      "description": "Win 5 games in a row.",
+      "glyph": "🔥",
+      "when": {
+        "won": true
+      },
+      "streak": 5
+    },
+    {
+      "id": "ten-wins",
+      "title": "Ten Wins",
+      "description": "Win 10 games.",
+      "glyph": "🏆",
+      "when": {
+        "won": true
+      },
+      "count": 10
+    }
+  ],
   "license": "MIT",
   "author": "lokeshmohanty",
   "repo": "https://github.com/lokeshmohanty/card-games"

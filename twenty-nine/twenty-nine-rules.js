@@ -541,6 +541,9 @@
 					kind: "teams",
 					ranking: [team(w), team(1 - w)],
 					scores: Object.fromEntries(s.seats.map((id, i) => [id, s.score[sideOf(i)]])),
+					// What game.json's achievements read (the arcade's docs/platform.md):
+					// each player's side's points and the other side's.
+					seatFacts: Object.fromEntries(s.seats.map((id, i) => [id, { ours: s.score[sideOf(i)], theirs: s.score[1 - sideOf(i)] }])),
 					details: [
 						{ label: "Hands played", value: s.history.length },
 						{ label: "Bids made", value: s.history.filter((h) => h.made).length },
