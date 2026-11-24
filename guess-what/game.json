@@ -26,6 +26,97 @@
     "party"
   ],
   "preview": "preview.gif",
+  "records": [
+    {
+      "id": "score",
+      "title": "Best score",
+      "of": "score",
+      "best": "max",
+      "unit": "points"
+    },
+    {
+      "id": "right",
+      "title": "Most guessed in a game",
+      "of": "facts.right",
+      "best": "max"
+    }
+  ],
+  "achievements": [
+    {
+      "id": "first-win",
+      "title": "First Win",
+      "description": "Score the most in a game of Guess What.",
+      "glyph": "🏁",
+      "when": {
+        "won": true
+      }
+    },
+    {
+      "id": "beat-3",
+      "title": "Beat 3 Bots",
+      "description": "Win against 3 or more bots.",
+      "glyph": "🤖",
+      "when": {
+        "won": true,
+        "bots": {
+          ">=": 3
+        }
+      }
+    },
+    {
+      "id": "quick-eye",
+      "title": "Quick Eye",
+      "description": "Guess a picture with more than half the time left.",
+      "glyph": "⚡",
+      "when": {
+        "facts.fast": {
+          ">=": 1
+        }
+      }
+    },
+    {
+      "id": "sharp-eye",
+      "title": "Sharp Eye",
+      "description": "Guess right 3 times in a game without a miss.",
+      "glyph": "🎯",
+      "when": {
+        "facts.right": {
+          ">=": 3
+        },
+        "facts.missed": 0
+      }
+    },
+    {
+      "id": "picture-perfect",
+      "title": "Picture Perfect",
+      "description": "Guess 25 pictures in all.",
+      "glyph": "🖼️",
+      "total": {
+        "of": "facts.right",
+        "atLeast": 25
+      }
+    },
+    {
+      "id": "hat-trick",
+      "title": "Hat Trick",
+      "description": "Win 3 games in a row.",
+      "glyph": "🎩",
+      "when": {
+        "won": true
+      },
+      "streak": 3
+    },
+    {
+      "id": "ten-wins",
+      "title": "Ten Wins",
+      "description": "Win 10 games.",
+      "glyph": "🏆",
+      "when": {
+        "won": true
+      },
+      "count": 10
+    }
+  ],
   "license": "MIT",
   "author": "lokeshmohanty",
   "repo": "https://github.com/lokeshmohanty/card-games"

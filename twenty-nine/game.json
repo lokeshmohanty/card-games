@@ -25,6 +25,69 @@
     "strategy"
   ],
   "preview": "preview.gif",
+  "achievements": [
+    {
+      "id": "first-win",
+      "title": "First Win",
+      "description": "Win a game of 29 with your partner.",
+      "glyph": "🏁",
+      "when": {
+        "won": true
+      }
+    },
+    {
+      "id": "shutout",
+      "title": "Shutout",
+      "description": "Win without the other side scoring a point.",
+      "glyph": "🧱",
+      "when": {
+        "won": true,
+        "facts.theirs": 0
+      }
+    },
+    {
+      "id": "comeback",
+      "title": "Comeback",
+      "description": "Win after trailing by 2 points or more.",
+      "glyph": "🔄",
+      "when": {
+        "won": true,
+        "facts.behind": {
+          ">=": 2
+        }
+      }
+    },
+    {
+      "id": "hat-trick",
+      "title": "Hat Trick",
+      "description": "Win 3 games in a row.",
+      "glyph": "🎩",
+      "when": {
+        "won": true
+      },
+      "streak": 3
+    },
+    {
+      "id": "five-in-a-row",
+      "title": "5 in a Row",
+      "description": "Win 5 games in a row.",
+      "glyph": "🔥",
+      "when": {
+        "won": true
+      },
+      "streak": 5
+    },
+    {
+      "id": "ten-wins",
+      "title": "Ten Wins",
+      "description": "Win 10 games.",
+      "glyph": "🏆",
+      "when": {
+        "won": true
+      },
+      "count": 10
+    }
+  ],
   "license": "MIT",
   "author": "lokeshmohanty",
   "repo": "https://github.com/lokeshmohanty/card-games"
