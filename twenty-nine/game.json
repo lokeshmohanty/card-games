@@ -48,12 +48,12 @@
     {
       "id": "comeback",
       "title": "Comeback",
-      "description": "Win a game the other side led by 3 or more.",
+      "description": "Win after trailing by 2 points or more.",
       "glyph": "🔄",
       "when": {
         "won": true,
-        "facts.theirs": {
-          ">=": 3
+        "facts.behind": {
+          ">=": 2
         }
       }
     },

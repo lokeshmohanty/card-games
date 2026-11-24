@@ -208,11 +208,19 @@
 			if (s.trickNo === 8) endHand();
 		}
 
+		/** Each side's largest deficit this game, for the arcade's Comeback (seatFacts). */
+		function noteBehind() {
+			const b = s.behind ?? [0, 0];
+			s.behind = [Math.max(b[0], s.score[1] - s.score[0]), Math.max(b[1], s.score[0] - s.score[1])];
+		}
+
 		function endHand() {
 			const side = sideOf(s.bidder);
 			const made = s.points[side] >= s.bid;
 			const to = made ? side : 1 - side;
+			noteBehind();
 			s.score[to]++;
+			noteBehind();
 			s.outcome = { side, bid: s.bid, points: s.points[side], made, to };
 			s.history.push({ ...s.outcome, bidder: s.bidder, trump: s.trump });
 			event({ kind: "hand", seat: s.bidder, made, points: s.points[side], bid: s.bid });
@@ -430,6 +438,7 @@
 					dealer,
 					firstDealerId: ids[dealer] ?? null,
 					score: [0, 0],
+					behind: [0, 0], // each side's largest deficit this game
 					history: [],
 					hand: 0,
 					hands: [[], [], [], []],
@@ -543,7 +552,9 @@
 					scores: Object.fromEntries(s.seats.map((id, i) => [id, s.score[sideOf(i)]])),
 					// What game.json's achievements read (the arcade's docs/platform.md):
 					// each player's side's points and the other side's.
-					seatFacts: Object.fromEntries(s.seats.map((id, i) => [id, { ours: s.score[sideOf(i)], theirs: s.score[1 - sideOf(i)] }])),
+					seatFacts: Object.fromEntries(
+						s.seats.map((id, i) => [id, { ours: s.score[sideOf(i)], theirs: s.score[1 - sideOf(i)], behind: s.behind?.[sideOf(i)] ?? 0, goal: s.house.goal }]),
+					),
 					details: [
 						{ label: "Hands played", value: s.history.length },
 						{ label: "Bids made", value: s.history.filter((h) => h.made).length },

@@ -243,6 +243,33 @@ console.log("\nscoring a hand and the game");
 	check("the result: the two sides, the winners first", r?.kind === "teams" && JSON.stringify(r.ranking) === '[["p1","p3"],["p0","p2"]]' && r.scores.p1 === 3, JSON.stringify(r));
 }
 
+console.log("\nthe facts the arcade's achievements read (seatFacts)");
+{
+	// Trailing 0–2, a hand won: the deficit is remembered for the side.
+	const g = table((s) => {
+		inPlay(s, [["Js"], ["7s"], ["9s"], ["As"]], { bidder: 0, bid: 16, trump: "hearts", turn: 0 });
+		s.trickNo = 7;
+		s.points = [10, 12];
+		s.score = [0, 2];
+	});
+	for (const [p, c] of [["p0", "Js"], ["p1", "7s"], ["p2", "9s"], ["p3", "As"]]) g.apply({ action: { play: C(c) }, by: p });
+	check("a side's largest deficit is kept as hands are scored", JSON.stringify(g.snapshot().s.behind) === "[2,0]", JSON.stringify(g.snapshot().s.behind));
+	// To 6, having trailed by 2: a comeback; the goal reported too.
+	const f = table(
+		(s) => {
+			inPlay(s, [["Js"], ["7s"], ["9s"], ["As"]], { bidder: 0, bid: 16, trump: "hearts", turn: 0 });
+			s.trickNo = 7;
+			s.points = [10, 12];
+			s.score = [5, 5];
+			s.behind = [2, 1];
+		},
+		{ goal: 6 },
+	);
+	for (const [p, c] of [["p0", "Js"], ["p1", "7s"], ["p2", "9s"], ["p3", "As"]]) f.apply({ action: { play: C(c) }, by: p });
+	const r = f.result();
+	check("the result: each player's side's points, the other's, its largest deficit and the goal", JSON.stringify(r?.seatFacts?.p0) === '{"ours":6,"theirs":5,"behind":2,"goal":6}' && r.seatFacts.p1.behind === 1, JSON.stringify(r?.seatFacts));
+}
+
 console.log("\nthe bots bid and play sensibly, and finish games");
 {
 	let finished = 0;
