@@ -136,6 +136,7 @@ console.log("\na round on every phone");
 	pass(g, REVEAL_MS);
 	const r = g.result();
 	check("after everyone has guessed (once each), the game ends with a ranking by points", g.view({ seat: null }).phase === "over" && r?.kind === "ffa" && r.ranking[0].length >= 1, JSON.stringify(r));
+	check("…and each player's guessing, for the arcade's achievements (seatFacts): right, missed, fast", JSON.stringify(r?.seatFacts) === '{"p0":{"right":1,"missed":0,"fast":1},"p1":{"right":1,"missed":0,"fast":1},"p2":{"right":0,"missed":1,"fast":0}}', JSON.stringify(r?.seatFacts));
 }
 
 console.log("\nno repeats until the pool is spent");
@@ -234,6 +235,7 @@ console.log("\none phone");
 	pass(g, 30_000);
 	pass(g, TALLY_MS);
 	const r = g.result();
+	check("one phone: GOT IT counts as a right guess for the player holding it", r.seatFacts?.bot_1?.right === 2, JSON.stringify(r.seatFacts));
 	check("the end: ranked by pictures got, the people on the phone named", g.view({ seat: null }).phase === "over" && JSON.stringify(r.ranking[0]) === '["bot_1"]' && r.names.bot_1 === "Player 2" && r.names.bot_2 === "Player 3" && !("bot_3" in r.scores), JSON.stringify(r));
 }
 

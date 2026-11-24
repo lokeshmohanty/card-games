@@ -225,6 +225,15 @@
 			s.lastClue[by] = now();
 		}
 
+		/** A guesser's own tally, for the arcade's achievements: right, missed, fast (a fast one is right too). */
+		function mark(i, how) {
+			const m = { right: 0, missed: 0, fast: 0, ...(s.mine?.[i] ?? {}) };
+			if (how === "missed") m.missed++;
+			else m.right++;
+			if (how === "fast") m.fast++;
+			s.mine = { ...(s.mine ?? {}), [i]: m };
+		}
+
 		function reveal(right) {
 			const left = Math.max(0, s.deadline - now());
 			const givers = live().filter((i) => i !== s.guesser);
@@ -236,6 +245,7 @@
 				if (best != null && best !== s.guesser && !s.gone[best]) gained[best] = (gained[best] ?? 0) + SCORE.best;
 			}
 			for (const [i, n] of Object.entries(gained)) s.scores[i] = (s.scores[i] ?? 0) + n;
+			mark(s.guesser, right ? (left > (s.opts.secs * 1000) / 2 ? "fast" : "right") : "missed");
 			s.result = { right, item: s.item, guesser: s.guesser, secsLeft: Math.ceil(left / 1000), gained, best: right ? best : null };
 			if (right) s.rights++;
 			s.phase = "reveal";
@@ -291,6 +301,7 @@
 			s.queue = Array.from({ length: s.opts.turns }, () => s.order).flat();
 			s.total = s.queue.length;
 			s.scores = Object.fromEntries(s.players.map((i) => [i, 0]));
+			s.mine = {};
 			s.round = -1;
 			nextRound();
 		}
@@ -417,6 +428,7 @@
 						s.got.push(s.item);
 						s.scores[s.guesser] = (s.scores[s.guesser] ?? 0) + 1;
 						s.rights++;
+						mark(s.guesser, "right");
 					}
 					const r = rng(s.rng);
 					s.item = draw(r);
@@ -499,6 +511,8 @@
 						{ label: s.mode === "one" ? "Got" : "Guessed right", value: s.rights },
 					],
 				};
+				// What game.json's achievements and records read (the arcade's docs/platform.md).
+				out.seatFacts = Object.fromEntries(ids.map((i) => [s.seats[i], { right: 0, missed: 0, fast: 0, ...(s.mine?.[i] ?? {}) }]));
 				if (s.mode === "one") out.names = Object.fromEntries(s.players.filter((i) => s.local[i]).map((i) => [s.seats[i], nameFor(i)]));
 				return out;
 			},
